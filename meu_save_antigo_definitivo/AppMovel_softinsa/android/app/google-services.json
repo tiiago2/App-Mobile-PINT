@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "229998822163",
+    "project_id": "aplicacaopint",
+    "storage_bucket": "aplicacaopint.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:229998822163:android:7fb930360c53d07f6b90e6",
+        "android_client_info": {
+          "package_name": "com.example.app_movel_softinsa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsI_VSQf3KJFDesrRCyjy-0P1tywwd-VI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

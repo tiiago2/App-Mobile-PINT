@@ -15,6 +15,7 @@ import 'package:app_movel_softinsa/pages/galeria.dart';
 import 'package:app_movel_softinsa/pages/session_loading.dart';
 import 'package:app_movel_softinsa/pages/objetivos.dart';
 import 'package:app_movel_softinsa/pages/home.dart';
+import 'package:app_movel_softinsa/screens/dev_test_screen.dart';
 
 class AppRoutes {
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -62,6 +63,15 @@ class AppRoutes {
       GoRoute(
         path: '/session-loading',
         builder: (context, state) => const SessionLoadingScreen(),
+      ),
+      GoRoute(
+        path: '/dev-test',
+        builder: (context, state) {
+          final userId = _authController.currentUser?['id'] ??
+              _authController.currentUser?['user_id'] ??
+              1;
+          return DevTestScreen(userId: userId);
+        },
       ),
       // GoRoute(
       //   path: '/login',
