@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-import '../database/basededados.dart';
+import '../database/database_helper.dart';
+import '../database/database_schema.dart';
+import '../database/daos/perfil_dao.dart';
+import '../database/sync_helpers.dart';
+import '../database/local/secure_storage.dart';
 import '../services/api_service.dart';
 import '../services/session_storage.dart';
 
@@ -19,7 +23,6 @@ class AuthController extends ChangeNotifier {
 
   final SessionStorage _sessionStorage = SessionStorage.instance;
   final ApiService _apiService = ApiService();
-  final Basededados _basededados = Basededados.instance;
 
   AuthStatus _status = AuthStatus.checking;
   String? _accessToken;
@@ -48,41 +51,41 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> completeLogin({
-    required String accessToken,
+    required String token,
     required String refreshToken,
-    Map<String, dynamic>? user,
+    Map<String, dynamic>? userJson,
   }) async {
-    final cleanAccessToken = accessToken.trim();
+    final cleanAccessToken = token.trim();
     final cleanRefreshToken = refreshToken.trim();
 
     if (cleanAccessToken.isEmpty || cleanRefreshToken.isEmpty) {
       throw const SessionStorageException('invalid_tokens');
     }
 
-    await _sessionStorage.saveTokens(
-      accessToken: cleanAccessToken,
-      refreshToken: cleanRefreshToken,
-    );
-
-    _accessToken = cleanAccessToken;
-    _refreshToken = cleanRefreshToken;
-
     try {
-      _currentUser = await _apiService.getUser(accessToken: cleanAccessToken);
-      await _guardarPerfilLocalSePossivel(_currentUser);
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await _clearInvalidStoredSession();
-        _setStatus(AuthStatus.unauthenticated);
-        rethrow;
+      await _sessionStorage.saveTokens(
+        accessToken: cleanAccessToken,
+        refreshToken: cleanRefreshToken,
+      );
+
+      await SecureStorage.saveToken(cleanAccessToken);
+
+      _accessToken = cleanAccessToken;
+      _refreshToken = cleanRefreshToken;
+
+      if (userJson != null && userJson.isNotEmpty) {
+        _currentUser = userJson;
+      } else {
+        _currentUser = await _apiService.getUser(accessToken: cleanAccessToken);
       }
 
-      _currentUser = user;
-      await _guardarPerfilLocalSePossivel(user);
+      await _guardarPerfilLocalSePossivel(_currentUser);
+      _firstAccessEmail = null;
+      _setStatus(AuthStatus.authenticatedOnline);
+    } catch (e) {
+      await logout();
+      rethrow;
     }
-
-    _firstAccessEmail = null;
-    _setStatus(AuthStatus.authenticatedOnline);
   }
 
   void requireFirstAccess(String email) {
@@ -104,6 +107,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> logout() async {
     await _sessionStorage.clearTokens();
+    await SecureStorage.deleteToken();
     await _limparPerfilLocalSePossivel();
     await _limparBadgesLocalSePossivel();
     _clearMemorySession();
@@ -126,6 +130,8 @@ class AuthController extends ChangeNotifier {
         accessToken: newAccessToken,
         refreshToken: refreshToken,
       );
+
+      await SecureStorage.saveToken(newAccessToken);
 
       _accessToken = newAccessToken;
 
@@ -207,6 +213,8 @@ class AuthController extends ChangeNotifier {
         refreshToken: tokens.refreshToken,
       );
 
+      await SecureStorage.saveToken(newAccessToken);
+
       _accessToken = newAccessToken;
       _refreshToken = tokens.refreshToken;
       _currentUser = await _apiService.getUser(accessToken: newAccessToken);
@@ -245,26 +253,40 @@ class AuthController extends ChangeNotifier {
     }
 
     try {
-      await _basededados.guardarPerfil(perfil);
-    } on BaseDadosException {}
+      final userId = intOrNull(perfil['id'] ?? perfil['user_id'] ?? perfil['id_utilizador']);
+      if (userId != null && userId > 0) {
+        await PerfilDao.instance.aplicarPerfilRemoto(userId: userId, perfil: perfil);
+      }
+    } catch (_) {}
   }
 
   Future<void> _carregarPerfilLocalSePossivel() async {
     try {
-      _currentUser = await _basededados.lerPerfil() ?? _currentUser;
-    } on BaseDadosException {}
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.query(DatabaseSchema.perfilTable, limit: 1);
+      if (rows.isNotEmpty) {
+        final row = rows.first;
+        final userId = intOrNull(row['id_utilizador']);
+        if (userId != null) {
+          _currentUser = await PerfilDao.instance.lerPerfilDoUtilizador(userId);
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _limparPerfilLocalSePossivel() async {
     try {
-      await _basededados.limparPerfil();
-    } on BaseDadosException {}
+      final db = await DatabaseHelper.instance.database;
+      await db.delete(DatabaseSchema.perfilTable);
+    } catch (_) {}
   }
 
   Future<void> _limparBadgesLocalSePossivel() async {
     try {
-      await _basededados.limparBadges();
-    } on BaseDadosException {}
+      final db = await DatabaseHelper.instance.database;
+      await db.delete(DatabaseSchema.badgesTable);
+      await db.delete(DatabaseSchema.registoBadgesTable);
+    } catch (_) {}
   }
 
   void _clearMemorySession({bool clearFirstAccessEmail = true}) {

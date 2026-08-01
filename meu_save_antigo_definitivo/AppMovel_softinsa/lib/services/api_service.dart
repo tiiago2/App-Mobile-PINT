@@ -44,8 +44,8 @@ class MeBadgesApiResponse {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:5001/api';
-  static const Duration _timeout = Duration(seconds: 15);
+  static const String baseUrl = 'https://pint-he77.onrender.com/api';
+  static const Duration _timeout = Duration(seconds: 35);
 
   final http.Client _client;
 
@@ -60,10 +60,11 @@ class ApiService {
     required String password,
   }) async {
     final json = await _postJson(
-      '/login',
+      '/mobile/auth/login',
       body: {
-        'email': email,
+        'email': email.trim().toLowerCase(),
         'password': password,
+        'device_id': 'dispositivo_flutter_1',
       },
     );
 
@@ -71,8 +72,8 @@ class ApiService {
 
     return LoginApiResponse(
       requiresPasswordChange: json['requiresPasswordChange'] == true,
-      token: json['token'] as String?,
-      refreshToken: json['refreshToken'] as String?,
+      token: (json['token'] ?? json['access_token']) as String?,
+      refreshToken: (json['refreshToken'] ?? json['refresh_token']) as String?,
       user: user is Map<String, dynamic> ? user : null,
     );
   }
@@ -181,17 +182,25 @@ class ApiService {
     String path, {
     required Map<String, dynamic> body,
   }) async {
+    final url = '$baseUrl$path';
+    final payload = jsonEncode(body);
+    print('🚨 [HTTP POST REQUEST] URL: $url');
+    print('🚨 [HTTP POST REQUEST] PAYLOAD: $payload');
+
     try {
       final response = await _client
           .post(
-            Uri.parse('$baseUrl$path'),
+            Uri.parse(url),
             headers: const {
               HttpHeaders.contentTypeHeader: 'application/json',
               HttpHeaders.acceptHeader: 'application/json',
             },
-            body: jsonEncode(body),
+            body: payload,
           )
           .timeout(_timeout);
+
+      print('🚨 [HTTP POST RESPONSE] STATUS CODE: ${response.statusCode}');
+      print('🚨 [HTTP POST RESPONSE] BODY: ${response.body}');
 
       final decoded = _decodeJsonResponse(response);
 

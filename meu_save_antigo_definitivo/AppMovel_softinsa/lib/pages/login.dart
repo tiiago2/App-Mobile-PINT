@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../database/sync_manager.dart';
+import '../services/fcm_service.dart';
 import '../controllers/auth_controller.dart';
 import '../idiomas/app_localizations.dart';
 import '../services/api_service.dart';
@@ -115,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _erroGeral = null;
     });
 
-    final email = _emailController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
 
     try {
       final response = await _apiService.login(
@@ -141,10 +144,19 @@ class _LoginScreenState extends State<LoginScreen> {
           refreshToken != null &&
           refreshToken.isNotEmpty) {
         await AuthController.instance.completeLogin(
-          accessToken: token,
+          token: token,
           refreshToken: refreshToken,
-          user: response.user,
+          userJson: response.user,
         );
+
+        // Inicializar o FCM e registar o token no servidor
+        unawaited(FcmService.instance.inicializarFCM());
+        FcmService.instance.inicializarListeners();
+
+        // Disparar o Pull Sync inicial para carregar dados do utilizador
+        final userIdRaw = response.user?['id'] ?? response.user?['id_utilizador'];
+        final userId = userIdRaw != null ? int.tryParse(userIdRaw.toString()) : null;
+        unawaited(SyncManager.instance.executePullSync(userId));
 
         if (!mounted) {
           return;
@@ -173,6 +185,15 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _erroGeral = _mapearErro(l10n, erro);
       });
+    } catch (erro) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _erroGeral = l10n.authErroGenerico;
+      });
+      debugPrint('❌ Erro inesperado no login: $erro');
     } finally {
       if (mounted) {
         setState(() {

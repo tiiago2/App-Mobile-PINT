@@ -26,6 +26,8 @@ import 'sync_helpers.dart';
 import 'dart:convert';
 
 class SyncManager {
+  static final SyncManager instance = SyncManager();
+
   final ApiClient _api = ApiClient();
   final SyncStateDao _syncStateDao = SyncStateDao();
 

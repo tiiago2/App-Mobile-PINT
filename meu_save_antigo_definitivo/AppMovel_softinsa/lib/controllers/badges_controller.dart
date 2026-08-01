@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../database/basededados.dart';
+import '../database/daos/badges_dao.dart';
 import '../services/api_service.dart';
 import 'auth_controller.dart';
 
@@ -20,7 +20,6 @@ class BadgesController extends ChangeNotifier {
   static final BadgesController instance = BadgesController._();
 
   final ApiService _apiService = ApiService();
-  final Basededados _basededados = Basededados.instance;
   final AuthController _authController = AuthController.instance;
 
   List<Map<String, dynamic>> _badges = const [];
@@ -82,8 +81,8 @@ class BadgesController extends ChangeNotifier {
       final badges = response.badges;
 
       try {
-        await _basededados.substituirBadges(badges);
-      } on BaseDadosException {}
+        await BadgesDao.instance.upsertFromSync(badges);
+      } catch (_) {}
 
       _publicarBadges(badges, BadgesStatus.readyOnline);
     } on ApiException catch (error) {
@@ -127,8 +126,8 @@ class BadgesController extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> _lerCacheSePossivel() async {
     try {
-      return await _basededados.lerBadges();
-    } on BaseDadosException {
+      return await BadgesDao.instance.getBadges();
+    } catch (_) {
       return const [];
     }
   }

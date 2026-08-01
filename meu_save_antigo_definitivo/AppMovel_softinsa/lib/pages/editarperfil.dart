@@ -3,6 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:uicons/uicons.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
+import '../controllers/auth_controller.dart';
+import '../database/daos/perfil_dao.dart';
+import '../database/sync_manager.dart';
+import '../database/sync_helpers.dart';
 import '../widgets/top_bar_actions.dart';
 import '../widgets/searchbar_filter.dart';
 
@@ -56,10 +60,19 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   @override
   void initState() {
     super.initState();
-    _nomeController = TextEditingController(text: mockPerfil['nome']);
-    _areaController = TextEditingController(text: mockPerfil['area']);
-    _emailController = TextEditingController(text: mockPerfil['email']);
-    _telefoneController = TextEditingController(text: mockPerfil['telefone']);
+    final user = AuthController.instance.currentUser;
+    final nome = user?['nome']?.toString() ?? user?['nome_user']?.toString() ?? mockPerfil['nome'];
+    
+    final areaMap = user?['area'];
+    final area = areaMap is Map ? areaMap['nome']?.toString() : (user?['area']?.toString() ?? mockPerfil['area']);
+    
+    final email = user?['email']?.toString() ?? mockPerfil['email'];
+    final telefone = user?['telefone']?.toString() ?? mockPerfil['telefone'];
+
+    _nomeController = TextEditingController(text: nome);
+    _areaController = TextEditingController(text: area);
+    _emailController = TextEditingController(text: email);
+    _telefoneController = TextEditingController(text: telefone);
   }
 
   @override
@@ -73,7 +86,37 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
 
   void _guardar() {
     if (_formKey.currentState!.validate()) {
-      // Adicionar a lógica de gravação aqui no futuro
+      final user = AuthController.instance.currentUser;
+      final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
+      
+      if (userId != null && userId > 0) {
+        final userArea = user?['area'];
+        String? areaId;
+        if (userArea is Map) {
+          areaId = userArea['id_area']?.toString();
+        }
+        
+        final perfilAtualizado = {
+          'nome': _nomeController.text.trim(),
+          'email': _emailController.text.trim(),
+          'telefone': _telefoneController.text.trim(),
+          'foto': user?['foto'] ?? user?['imagem_perfil'],
+          'id_area': user?['id_area']?.toString() ?? areaId,
+        };
+        
+        PerfilDao.instance.guardarPerfilLocal(
+          userId: userId,
+          perfil: perfilAtualizado,
+        ).then((_) {
+          SyncManager.instance.executePushSync(userId).catchError((e) {
+            debugPrint('⚠️ [SyncManager] Erro no push sync automático ao editar perfil: $e');
+            return false;
+          });
+        }).catchError((e) {
+          debugPrint('❌ [EditarPerfil] Erro ao guardar perfil localmente: $e');
+        });
+      }
+
       final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil atualizado com sucesso!')),
