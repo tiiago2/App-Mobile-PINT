@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uicons/uicons.dart';
+import '../controllers/notificacoes_controller.dart';
 import '../variaveis/variaveis.dart';
 
 class NotificacoesDialog extends StatefulWidget {
@@ -11,62 +12,13 @@ class NotificacoesDialog extends StatefulWidget {
 
 class _NotificacoesDialogState extends State<NotificacoesDialog> {
   int _selectedTab = 0; // 0: Notificações, 1: Avisos
+  final NotificacoesController _controller = NotificacoesController.instance;
 
-  // Mock de notificações normais
-  final List<Map<String, dynamic>> _mockNotificacoes = [
-    {
-      'descricao': 'Administrador atualizou o badge Low Code(júnior)',
-      'tempo': 'há 2 horas',
-      'isNova': true,
-      'tipo': 'badge',
-    },
-    {
-      'descricao': 'A sua candidatura em Low Code(júnior) foi aceite',
-      'tempo': 'há 7 horas',
-      'isNova': false,
-      'tipo': 'aceite',
-    },
-    {
-      'descricao': 'A sua candidatura em Low Code(Sénior) foi recusada',
-      'tempo': 'há 1 dia',
-      'isNova': false,
-      'tipo': 'rejeitada',
-    },
-    {
-      'descricao': 'A sua candidatura em Low Code(Intermédio) foi aceite',
-      'tempo': 'há 1 mês',
-      'isNova': false,
-      'tipo': 'aceite',
-    },
-  ];
-
-  // Mock de avisos
-  final List<Map<String, dynamic>> _mockAvisos = [
-    {
-      'descricao': 'Manutenção programada do sistema no dia 28/07 das 02:00 às 04:00.',
-      'tempo': 'há 1 dia',
-      'isNova': true,
-      'tipoDestino': 'Grupo',
-      'destino': 'Todos os Consultores',
-      'autor': 'Administrador',
-    },
-    {
-      'descricao': 'Por favor, atualize o seu perfil e adicione os novos certificados obtidos.',
-      'tempo': 'há 3 dias',
-      'isNova': false,
-      'tipoDestino': 'Individual',
-      'destino': 'Tiago',
-      'autor': 'Recursos Humanos',
-    },
-    {
-      'descricao': 'Nova Service Line "Cloud & DevOps" disponível para candidaturas.',
-      'tempo': 'há 5 dias',
-      'isNova': false,
-      'tipoDestino': 'Área',
-      'destino': 'Cloud',
-      'autor': 'Direção',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _controller.carregar();
+  }
 
   Widget _obterIconeETempo(String tipo) {
     IconData iconData = UIcons.boldRounded.badge;
@@ -79,7 +31,7 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
     } else if (lowerTipo == 'aceite') {
       iconData = Icons.verified_rounded;
       color = AppCores.sucessoLogin;
-    } else if (lowerTipo == 'rejeitada') {
+    } else if (lowerTipo == 'rejeitada' || lowerTipo == 'recusada') {
       iconData = Icons.warning_rounded;
       color = const Color(0xFFC40003);
     } else {
@@ -91,9 +43,9 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
   }
 
   void _mostrarDetalheAviso(BuildContext context, Map<String, dynamic> raw) {
-    final dataStr = raw['tempo'];
+    final dataStr = raw['data_envio'] ?? raw['tempo'] ?? '';
     final autor = raw['autor'] ?? 'Administrador';
-    final mensagem = raw['descricao'] ?? '';
+    final mensagem = raw['descricao_notificacao'] ?? raw['descricao'] ?? '';
 
     showDialog(
       context: context,
@@ -181,7 +133,6 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Obter traduções localizadas dinâmicas
     final locale = Localizations.localeOf(context).languageCode;
     String tabNotificacoes = "Notificações";
     String tabAvisos = "Avisos";
@@ -200,152 +151,172 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
       semAvisos = "No hay avisos.";
     }
 
-    final listExibida = _selectedTab == 0 ? _mockNotificacoes : _mockAvisos;
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) {
+        final todas = _controller.notificacoes;
+        final listNotificacoes = todas.where((n) {
+          final tipo = (n['tipo_notificacao'] ?? n['tipo'] ?? '').toString().toLowerCase();
+          return tipo != 'aviso' && tipo != 'comunicado';
+        }).toList();
 
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        width: 320,
-        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
-        decoration: BoxDecoration(
-          color: AppCores.branco,
-          borderRadius: BorderRadius.circular(14.0),
-          border: Border.all(color: AppCores.outline, width: 1.6),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 10.0,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Cabeçalho com abas
-            Row(
-              children: [
-                // Aba Notificações
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _selectedTab = 0),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Text(
-                            tabNotificacoes,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: _selectedTab == 0
-                                  ? AppCores.azulFundo
-                                  : Colors.grey.shade500,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          height: 2.5,
-                          decoration: BoxDecoration(
-                            color: _selectedTab == 0
-                                ? AppCores.azulFundo
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(1.25),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                // Aba Avisos
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _selectedTab = 1),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Text(
-                            tabAvisos,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: _selectedTab == 1
-                                  ? AppCores.azulFundo
-                                  : Colors.grey.shade500,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          height: 2.5,
-                          decoration: BoxDecoration(
-                            color: _selectedTab == 1
-                                ? AppCores.azulFundo
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(1.25),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+        final listAvisos = todas.where((n) {
+          final tipo = (n['tipo_notificacao'] ?? n['tipo'] ?? '').toString().toLowerCase();
+          return tipo == 'aviso' || tipo == 'comunicado';
+        }).toList();
+
+        final listExibida = _selectedTab == 0 ? listNotificacoes : listAvisos;
+
+        return Material(
+          type: MaterialType.transparency,
+          child: Container(
+            width: 320,
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
+            decoration: BoxDecoration(
+              color: AppCores.branco,
+              borderRadius: BorderRadius.circular(14.0),
+              border: Border.all(color: AppCores.outline, width: 1.6),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10.0,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            const Divider(color: AppCores.outline, thickness: 1.2, height: 1.2),
-            const SizedBox(height: 12),
-            // Lista de Notificações / Avisos
-            Flexible(
-              child: listExibida.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32.0),
-                      child: Center(
-                        child: Text(
-                          _selectedTab == 0 ? semNotificacoes : semAvisos,
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    )
-                  : ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 300),
-                      child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Cabeçalho com abas
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedTab = 0),
                         child: Column(
-                          children: listExibida.map((raw) {
-                            final descricao = raw['descricao'] ?? '';
-                            final tempoStr = raw['tempo'] ?? '';
-                            final isNova = raw['isNova'] ?? false;
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(10.0),
-                                onTap: () {
-                                  if (_selectedTab == 1) {
-                                    _mostrarDetalheAviso(context, raw);
-                                  }
-                                },
-                                child: _NotificacaoItem(
-                                  descricao: descricao,
-                                  tempo: tempoStr,
-                                  icone: _selectedTab == 0 ? _obterIconeETempo(raw['tipo'] ?? '') : const SizedBox.shrink(),
-                                  isNova: isNova,
-                                  isAviso: _selectedTab == 1,
-                                  tipoDestino: raw['tipoDestino'],
-                                  destino: raw['destino'],
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Text(
+                                tabNotificacoes,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: _selectedTab == 0
+                                      ? AppCores.azulFundo
+                                      : Colors.grey.shade500,
                                 ),
                               ),
-                            );
-                          }).toList(),
+                            ),
+                            Container(
+                              height: 2.5,
+                              decoration: BoxDecoration(
+                                color: _selectedTab == 0
+                                    ? AppCores.azulFundo
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(1.25),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedTab = 1),
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Text(
+                                tabAvisos,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: _selectedTab == 1
+                                      ? AppCores.azulFundo
+                                      : Colors.grey.shade500,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              height: 2.5,
+                              decoration: BoxDecoration(
+                                color: _selectedTab == 1
+                                    ? AppCores.azulFundo
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(1.25),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(color: AppCores.outline, thickness: 1.2, height: 1.2),
+                const SizedBox(height: 12),
+                // Lista de Notificações / Avisos
+                Flexible(
+                  child: listExibida.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32.0),
+                          child: Center(
+                            child: Text(
+                              _selectedTab == 0 ? semNotificacoes : semAvisos,
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        )
+                      : ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 300),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: listExibida.map((raw) {
+                                final descricao = raw['descricao_notificacao'] ?? raw['descricao'] ?? '';
+                                final tempoStr = raw['data_envio'] ?? raw['tempo'] ?? '';
+                                final isNova = raw['lida'] == 0 || raw['isNova'] == true;
+                                final idNotificacao = raw['id_notificacao'] as int?;
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(10.0),
+                                    onTap: () {
+                                      if (idNotificacao != null) {
+                                        _controller.marcarComoLida(idNotificacao);
+                                      }
+                                      if (_selectedTab == 1) {
+                                        _mostrarDetalheAviso(context, raw);
+                                      }
+                                    },
+                                    child: _NotificacaoItem(
+                                      descricao: descricao,
+                                      tempo: tempoStr,
+                                      icone: _selectedTab == 0
+                                          ? _obterIconeETempo(raw['tipo_notificacao'] ?? raw['tipo'] ?? '')
+                                          : const SizedBox.shrink(),
+                                      isNova: isNova,
+                                      isAviso: _selectedTab == 1,
+                                      tipoDestino: raw['tipoDestino'],
+                                      destino: raw['destino'],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -385,7 +356,6 @@ class _NotificacaoItem extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Texto do aviso à esquerda
             Expanded(
               child: Text(
                 descricao,
@@ -399,7 +369,6 @@ class _NotificacaoItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            // Lado direito (Ícone e Data)
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -410,7 +379,6 @@ class _NotificacaoItem extends StatelessWidget {
                   size: 16,
                 ),
                 const SizedBox(height: 6),
-                // Data por baixo
                 Text(
                   tempo,
                   style: const TextStyle(
@@ -440,7 +408,6 @@ class _NotificacaoItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Bolinha de Não Lida (Alerta): #00B8E0
           if (isNova) ...[
             Container(
               width: 8,
@@ -452,7 +419,6 @@ class _NotificacaoItem extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
-          // Texto descritivo/título ao centro
           Expanded(
             child: Text(
               descricao,
@@ -466,7 +432,6 @@ class _NotificacaoItem extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          // Lado direito (Ícone e Data por baixo)
           Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
