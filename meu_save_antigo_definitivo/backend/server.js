@@ -30,15 +30,18 @@ async function startBackend() {
       process.exit(1);
     }
 
-    await sequelize.authenticate();
-    console.log('Backend PDM: ligação à base de dados estabelecida.');
+    try {
+      await sequelize.authenticate();
+      console.log('Backend PDM: ligação à base de dados estabelecida.');
+    } catch (dbError) {
+      console.warn('Backend PDM: aviso - base de dados indisponível no arranque:', dbError.message);
+    }
 
     app.listen(port, '0.0.0.0', () => {
       console.log(`Backend PDM disponível na porta ${port}.`);
     });
   } catch (error) {
-    console.error('Backend PDM: não foi possível estabelecer ligação à base de dados.');
-    process.exit(1);
+    console.error('Backend PDM: não foi possível iniciar o servidor HTTP:', error);
   }
 }
 
