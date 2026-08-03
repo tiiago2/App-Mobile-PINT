@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uicons/uicons.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/perfil_controller.dart';
 import '../services/session_storage.dart';
 import '../variaveis/variaveis.dart';
 import '../variaveis/tipografia.dart';
@@ -10,7 +11,14 @@ import '../idiomas/app_localizations.dart';
 import 'badge_detalhe.dart';
 import 'historico_badges.dart';
 
-class PerfilScreen extends StatelessWidget {
+class PerfilScreen extends StatefulWidget {
+  const PerfilScreen({super.key});
+
+  @override
+  State<PerfilScreen> createState() => _PerfilScreenState();
+}
+
+class _PerfilScreenState extends State<PerfilScreen> {
   final Map<String, dynamic> mockPerfil = const {
     'nome': 'João Silva',
     'area': 'Low Code',
@@ -45,7 +53,13 @@ class PerfilScreen extends StatelessWidget {
 
   final List<int> mockGaleriaIds = const [2, 1, 3, 4];
 
-  const PerfilScreen({super.key});
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PerfilController.instance.carregarDadosPerfil();
+    });
+  }
 
   Future<void> _mostrarConfirmacaoLogout(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
@@ -210,122 +224,107 @@ class PerfilScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We can use l10n here if needed in the future
-    // final l10n = AppLocalizations.of(context)!;
-
     final authController = AuthController.instance;
+    final perfilController = PerfilController.instance;
 
     return AnimatedBuilder(
-      animation: authController,
+      animation: Listenable.merge([authController, perfilController]),
       builder: (context, _) {
-        final currentUser = authController.currentUser;
-        final nome = _lerString(
-          currentUser,
-          'nome',
-          mockPerfil['nome'] as String,
-        );
-        final email = _lerString(
-          currentUser,
-          'email',
-          mockPerfil['email'] as String,
-        );
-        final telefone = _lerString(
-          currentUser,
-          'telefone',
-          mockPerfil['telefone'] as String,
-        );
-        final area = _lerStringAninhada(
-          currentUser,
-          'area',
-          'nome',
-          mockPerfil['area'] as String,
-        );
-        final learningPathTitulo = _lerStringAninhada(
-          currentUser,
-          'learningPath',
-          'nome',
-          mockLearningPath['titulo'] as String,
-        );
-        final cargoAssinatura = _lerStringAninhada(
-          currentUser,
-          'serviceLine',
-          'nome',
-          _lerStringAninhada(
-            currentUser,
-            'area',
-            'nome',
-            mockPerfil['cargo'] as String,
-          ),
-        );
-        final fotoUrl = _lerUrlOuNull(currentUser, 'foto') ??
-            _lerUrlOuNull(currentUser, 'imagem_perfil') ??
+        final profile = perfilController.perfilData;
+        final lp = perfilController.learningPathProgress;
+
+        final nome = profile?['nome_user']?.toString() ??
+            _lerString(authController.currentUser, 'nome', mockPerfil['nome'] as String);
+
+        final email = profile?['email']?.toString() ??
+            _lerString(authController.currentUser, 'email', mockPerfil['email'] as String);
+
+        final telefone = profile?['telefone']?.toString() ??
+            _lerString(authController.currentUser, 'telefone', mockPerfil['telefone'] as String);
+
+        final area = profile?['nome_area']?.toString() ??
+            _lerStringAninhada(authController.currentUser, 'area', 'nome', mockPerfil['area'] as String);
+
+        final learningPathTitulo = lp?['titulo']?.toString() ??
+            _lerStringAninhada(authController.currentUser, 'learningPath', 'nome', mockLearningPath['titulo'] as String);
+
+        final badgesConquistados = lp?['badgesConquistados'] as int? ?? 0;
+        final badgesTotal = lp?['badgesTotal'] as int? ?? 0;
+
+        final cargoAssinatura = area;
+
+        final fotoUrl = profile?['imagem_perfil']?.toString() ??
+            _lerUrlOuNull(authController.currentUser, 'foto') ??
+            _lerUrlOuNull(authController.currentUser, 'imagem_perfil') ??
             (mockPerfil['fotoUrl'] as String?);
 
         return Scaffold(
-      backgroundColor: AppCores.branco,
-      appBar: AppBar(
-        backgroundColor: AppCores.branco,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: AppTamanhos.colocacao_titulo,
-        title: Text(
-          AppLocalizations.of(context)?.perfilTitulo ?? 'Perfil Pessoal',
-          style: const TextStyle(
-            color: AppCores.fontes,
-            fontSize: AppTamanhos.titulo,
-          ),
-        ),
-        actions: [
-          TopBarActions(
-            showLogoutIcon: true,
-            showDocumentIcon: true,
-            onLogoutPressed: () => _mostrarConfirmacaoLogout(context),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppTamanhos.margemEcra),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Column(
-              children: [
-                CartaoPerfil(
-                  nome: nome,
-                  area: area,
-                  email: email,
-                  telefone: telefone,
-                  fotoUrl: fotoUrl,
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoLearningPath(
-                  titulo: learningPathTitulo,
-                  badgesConquistados: mockLearningPath['badgesConquistados'],
-                  badgesTotal: mockLearningPath['badgesTotal'],
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoAssinatura(
-                  nome: nome,
-                  cargo: cargoAssinatura,
-                  email: email,
-                  telefone: telefone,
-                  badgeIds: mockAssinatura['badgeIds'],
-                  todosBadges: mockTodosBadges,
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoGaleriaBadges(
-                  todosBadges: mockTodosBadges,
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoHistoricoBadges(
-                  todosBadges: mockTodosBadges,
-                ),
-              ],
+          backgroundColor: AppCores.branco,
+          appBar: AppBar(
+            backgroundColor: AppCores.branco,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: false,
+            titleSpacing: AppTamanhos.colocacao_titulo,
+            title: Text(
+              AppLocalizations.of(context)?.perfilTitulo ?? 'Perfil Pessoal',
+              style: const TextStyle(
+                color: AppCores.fontes,
+                fontSize: AppTamanhos.titulo,
+              ),
             ),
+            actions: [
+              TopBarActions(
+                showLogoutIcon: true,
+                showDocumentIcon: true,
+                onLogoutPressed: () => _mostrarConfirmacaoLogout(context),
+              ),
+            ],
           ),
-        ),
-      ),
+          body: perfilController.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTamanhos.margemEcra),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Column(
+                        children: [
+                          CartaoPerfil(
+                            nome: nome,
+                            area: area,
+                            email: email,
+                            telefone: telefone,
+                            fotoUrl: fotoUrl,
+                          ),
+                          SizedBox(height: AppTamanhos.gapPerfil),
+                          CartaoLearningPath(
+                            titulo: learningPathTitulo,
+                            badgesConquistados: badgesConquistados,
+                            badgesTotal: badgesTotal,
+                          ),
+                          SizedBox(height: AppTamanhos.gapPerfil),
+                          CartaoAssinatura(
+                            nome: nome,
+                            cargo: cargoAssinatura,
+                            email: email,
+                            telefone: telefone,
+                            badgeIds: perfilController.signatureBadgeIds,
+                            todosBadges: perfilController.conqueredBadges,
+                          ),
+                          SizedBox(height: AppTamanhos.gapPerfil),
+                          CartaoGaleriaBadges(
+                            todosBadges: perfilController.conqueredBadges,
+                          ),
+                          SizedBox(height: AppTamanhos.gapPerfil),
+                          CartaoHistoricoBadges(
+                            todosBadges: perfilController.conqueredBadges,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
         );
       },
     );

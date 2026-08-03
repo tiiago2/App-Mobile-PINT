@@ -130,7 +130,7 @@ class DatabaseSchema {
   static const String createDocumentosTable = '''
     CREATE TABLE IF NOT EXISTS $documentosSubmissaoTable (
       id_ficheiro_local INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_ficheiro INTEGER,
+      id_ficheiro INTEGER UNIQUE,
       id_submissao_local INTEGER NOT NULL,
       id_requisito INTEGER NOT NULL,
       ficheiro TEXT,
@@ -151,6 +151,7 @@ class DatabaseSchema {
 
   static const String createHistoricoTable = '''
     CREATE TABLE IF NOT EXISTS $historicoTable (
+      id_historico INTEGER PRIMARY KEY,
       id_utilizador INTEGER,
       id_submissao INTEGER NOT NULL,
       aceite INT NOT NULL,

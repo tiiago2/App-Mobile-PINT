@@ -193,4 +193,71 @@ class PerfilDao {
     );
     print('✅ [SQLite Update] Perfil local $idLocal atualizado para ID Servidor $idServidor (sync_status = synced)');
   }
+
+  /// Query 1: Obter informação de perfil com nome de área
+  Future<Map<String, dynamic>?> lerPerfilComArea(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT p.nome_user, p.email, p.telefone, a.nome_area, p.imagem_perfil, p.id_area
+      FROM ${DatabaseSchema.perfilTable} p
+      LEFT JOIN ${DatabaseSchema.areasTable} a ON p.id_area = CAST(a.id_area AS TEXT)
+      WHERE p.id_utilizador = ?
+      LIMIT 1
+    ''', [userId]);
+
+    if (rows.isEmpty) return null;
+    return rows.first;
+  }
+
+  /// Query 5: Calcular o progresso no Learning Path do utilizador
+  Future<Map<String, dynamic>?> obterProgressoLearningPath(int userId, int idArea) async {
+    final db = await DatabaseHelper.instance.database;
+
+    // Passo A: Obter o ID e Nome do Learning Path
+    final lpRows = await db.rawQuery('''
+      SELECT sl.id_learning_path, lp.nome_learning_path
+      FROM ${DatabaseSchema.areasTable} a
+      INNER JOIN ${DatabaseSchema.serviceLinesTable} sl ON a.id_service_line = sl.id_service_line
+      INNER JOIN ${DatabaseSchema.learningPathsTable} lp ON sl.id_learning_path = lp.id_learning_path
+      WHERE a.id_area = ?
+      LIMIT 1
+    ''', [idArea]);
+
+    if (lpRows.isEmpty) return null;
+
+    final lpId = lpRows.first['id_learning_path'] as int;
+    final lpNome = lpRows.first['nome_learning_path'] as String;
+
+    // Passo B: Contar o total de Badges
+    final totalRows = await db.rawQuery('''
+      SELECT COUNT(b.id_badge) as total
+      FROM ${DatabaseSchema.badgesTable} b
+      INNER JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      INNER JOIN ${DatabaseSchema.serviceLinesTable} sl ON a.id_service_line = sl.id_service_line
+      WHERE sl.id_learning_path = ? AND (b.deleted_badge IS NOT 1)
+    ''', [lpId]);
+
+    final total = Sqflite.firstIntValue(totalRows) ?? 0;
+
+    // Passo C: Contar os Badges conquistados
+    final conquistadosRows = await db.rawQuery('''
+      SELECT COUNT(rb.id_badge) as conquistados
+      FROM ${DatabaseSchema.registoBadgesTable} rb
+      INNER JOIN ${DatabaseSchema.badgesTable} b ON rb.id_badge = b.id_badge
+      INNER JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      INNER JOIN ${DatabaseSchema.serviceLinesTable} sl ON a.id_service_line = sl.id_service_line
+      WHERE rb.id_utilizador = ? 
+        AND sl.id_learning_path = ? 
+        AND (rb.deleted_registo IS NOT 1)
+        AND (b.deleted_badge IS NOT 1)
+    ''', [userId, lpId]);
+
+    final conquistados = Sqflite.firstIntValue(conquistadosRows) ?? 0;
+
+    return {
+      'titulo': lpNome,
+      'badgesConquistados': conquistados,
+      'badgesTotal': total,
+    };
+  }
 }

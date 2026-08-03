@@ -115,40 +115,56 @@ class ObjetivosDao {
   /// Batch upserts objectives from sync.
   Future<void> upsertFromSync(List<Map<String, dynamic>> dados) async {
     final db = await DatabaseHelper.instance.database;
-    final batch = db.batch();
-    for (final raw in dados) {
-      final idObjetivo = intOrNull(raw['id_objetivo'] ?? raw['remote_id'] ?? raw['id']);
-      final idUtilizador = intOrNull(raw['id_utilizador'] ?? raw['utilizador_id'] ?? raw['user_id']);
-      final idBadge = intOrNull(raw['id_badge'] ?? raw['badge_id']);
+    await db.transaction((txn) async {
+      for (final raw in dados) {
+        final idObjetivo = intOrNull(raw['id_objetivo'] ?? raw['remote_id'] ?? raw['id']);
+        final idUtilizador = intOrNull(raw['id_utilizador'] ?? raw['utilizador_id'] ?? raw['user_id']);
+        final idBadge = intOrNull(raw['id_badge'] ?? raw['badge_id']);
 
-      if (idObjetivo == null || idUtilizador == null || idBadge == null) {
-        print('⚠️ [ObjetivosDao] Ignorado devido a chaves nulas: id_objetivo=$idObjetivo, id_utilizador=$idUtilizador, id_badge=$idBadge');
-        continue;
+        if (idObjetivo == null || idUtilizador == null || idBadge == null) {
+          print('⚠️ [ObjetivosDao] Ignorado devido a chaves nulas: id_objetivo=$idObjetivo, id_utilizador=$idUtilizador, id_badge=$idBadge');
+          continue;
+        }
+
+        final deletedObjetivo = (raw['deleted_objetivo'] == true || raw['deleted_objetivo'] == 1 || raw['deleted_at'] != null) ? 1 : 0;
+
+        final cleanRow = {
+          'id_objetivo': idObjetivo,
+          'id_utilizador': idUtilizador,
+          'id_badge': idBadge,
+          'data_inicial': raw['data_inicial'] ?? utcNow(),
+          'data_final': raw['data_final'] ?? raw['data'] ?? utcNow(),
+          'data_conclusao': raw['data_conclusao'],
+          'badge_json': raw['badge'] is Map ? jsonEncode(raw['badge']) : (raw['badge_json'] ?? '{}'),
+          'deleted_objetivo': deletedObjetivo,
+          'local_updated_at': utcNow(),
+          'updated_objetivo': raw['updated_objetivo']?.toString() ?? raw['server_updated_at']?.toString() ?? raw['updated_at']?.toString(),
+          'sync_status': 'synced',
+        };
+
+        final existing = await txn.query(
+          DatabaseSchema.objetivosTable,
+          columns: ['id_objetivo_local'],
+          where: 'id_objetivo = ?',
+          whereArgs: [idObjetivo],
+          limit: 1,
+        );
+
+        if (existing.isNotEmpty) {
+          await txn.update(
+            DatabaseSchema.objetivosTable,
+            cleanRow,
+            where: 'id_objetivo_local = ?',
+            whereArgs: [existing.first['id_objetivo_local']],
+          );
+        } else {
+          await txn.insert(
+            DatabaseSchema.objetivosTable,
+            cleanRow,
+          );
+        }
       }
-
-      final deletedObjetivo = (raw['deleted_objetivo'] == true || raw['deleted_objetivo'] == 1 || raw['deleted_at'] != null) ? 1 : 0;
-
-      final cleanRow = {
-        'id_objetivo': idObjetivo,
-        'id_utilizador': idUtilizador,
-        'id_badge': idBadge,
-        'data_inicial': raw['data_inicial'] ?? utcNow(),
-        'data_final': raw['data_final'] ?? raw['data'] ?? utcNow(),
-        'data_conclusao': raw['data_conclusao'],
-        'badge_json': raw['badge'] is Map ? jsonEncode(raw['badge']) : (raw['badge_json'] ?? '{}'),
-        'deleted_objetivo': deletedObjetivo,
-        'local_updated_at': utcNow(),
-        'updated_objetivo': raw['updated_objetivo']?.toString() ?? raw['server_updated_at']?.toString() ?? raw['updated_at']?.toString(),
-        'sync_status': 'synced',
-      };
-
-      batch.insert(
-        DatabaseSchema.objetivosTable,
-        cleanRow,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+    });
     _changes.add(-1);
   }
 
@@ -459,5 +475,44 @@ class ObjetivosDao {
       whereArgs: [serverId],
     );
     _changes.add(-1);
+  }
+
+  /// Query A: Obter os Objetivos do Utilizador com info do Badge
+  Future<List<Map<String, dynamic>>> obterObjetivosComBadges(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    return db.rawQuery('''
+      SELECT o.id_objetivo_local, o.id_objetivo, o.data_inicial, o.data_final, o.data_conclusao, o.sync_status,
+             b.id_badge, b.nome_badge, b.imagem, b.pontos_badge, a.nome_area as categoria_badge
+      FROM ${DatabaseSchema.objetivosTable} o
+      INNER JOIN ${DatabaseSchema.badgesTable} b ON o.id_badge = b.id_badge
+      LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      WHERE o.id_utilizador = ? 
+        AND (o.deleted_objetivo IS NOT 1) 
+        AND (b.deleted_badge IS NOT 1)
+    ''', [userId]);
+  }
+
+  /// Query B: Obter os Badges Disponíveis para criação de objetivos (exclui conquistados e objetivos ativos)
+  Future<List<Map<String, dynamic>>> obterBadgesDisponiveis(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    return db.rawQuery('''
+      SELECT b.id_badge, b.nome_badge, b.imagem, a.nome_area as categoria_badge
+      FROM ${DatabaseSchema.badgesTable} b
+      LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      WHERE (b.deleted_badge IS NOT 1)
+        AND b.id_badge NOT IN (
+          SELECT rb.id_badge 
+          FROM ${DatabaseSchema.registoBadgesTable} rb 
+          WHERE rb.id_utilizador = ? AND (rb.deleted_registo IS NOT 1)
+        )
+        AND b.id_badge NOT IN (
+          SELECT o.id_badge 
+          FROM ${DatabaseSchema.objetivosTable} o 
+          WHERE o.id_utilizador = ? 
+            AND o.data_conclusao IS NULL 
+            AND (o.deleted_objetivo IS NOT 1)
+        )
+      ORDER BY b.nome_badge ASC
+    ''', [userId, userId]);
   }
 }

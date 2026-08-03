@@ -8,7 +8,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'softinsa_mobile.db';
-  static const int databaseVersion = 2;
+  static const int databaseVersion = 3;
 
   Database? _database;
 

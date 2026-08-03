@@ -151,8 +151,13 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
 
 class GaleriaBadgesComEstado extends StatelessWidget {
   final List<Map<String, dynamic>> badges;
+  final bool centralizar;
 
-  const GaleriaBadgesComEstado({super.key, required this.badges});
+  const GaleriaBadgesComEstado({
+    super.key,
+    required this.badges,
+    this.centralizar = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -163,10 +168,15 @@ class GaleriaBadgesComEstado extends StatelessWidget {
       );
     }
 
-    return Wrap(
-      spacing: 16.0,
-      runSpacing: 16.0,
-      children: badges.map((badge) => BadgeItemComEstadoWrapper(badge: badge)).toList(),
+    return Container(
+      width: double.infinity,
+      alignment: centralizar ? Alignment.center : Alignment.centerLeft,
+      child: Wrap(
+        alignment: centralizar ? WrapAlignment.center : WrapAlignment.start,
+        spacing: 16.0,
+        runSpacing: 16.0,
+        children: badges.map((badge) => BadgeItemComEstadoWrapper(badge: badge)).toList(),
+      ),
     );
   }
 }

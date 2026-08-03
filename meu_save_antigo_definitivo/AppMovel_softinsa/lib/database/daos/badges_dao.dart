@@ -176,6 +176,261 @@ class BadgesDao {
       [badgeId],
     );
   }
+
+  /// Query 4: Obter os badges conquistados pelo utilizador com os seus detalhes
+  Future<List<Map<String, dynamic>>> obterBadgesConquistados(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT b.id_badge, b.nome_badge, b.imagem, b.pontos_badge, b.validade, rb.data_obtencao
+      FROM ${DatabaseSchema.registoBadgesTable} rb
+      INNER JOIN ${DatabaseSchema.badgesTable} b ON rb.id_badge = b.id_badge
+      WHERE rb.id_utilizador = ? 
+        AND (rb.deleted_registo IS NOT 1) 
+        AND (b.deleted_badge IS NOT 1)
+    ''', [userId]);
+
+    return rows.map((row) => {
+      'id': row['id_badge'],
+      'titulo': row['nome_badge'],
+      'subtitulo': row['nome_badge'],
+      'imagem': row['imagem'],
+      'pontos': row['pontos_badge'],
+      'dataAquisicao': row['data_obtencao'],
+      'validadeDias': row['validade'],
+    }).toList();
+  }
+
+  /// Query Galeria A: Obter todos os badges com estados calculados dinamicamente para a galeria
+  Future<List<Map<String, dynamic>>> obterTodosBadgesParaGaleria({
+    required int userId,
+    required int userAreaId,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT b.id_badge, b.nome_badge, b.imagem, b.especial, b.pontos_badge as pontos,
+             a.nome_area as areaNome, n.nome_nivel as nivelNome,
+             CASE WHEN b.id_area = ? THEN 1 ELSE 0 END as minha_area,
+             COALESCE(
+               (SELECT CASE WHEN rb.expirado = 1 THEN 'expirados' ELSE 'conquistados' END 
+                FROM ${DatabaseSchema.registoBadgesTable} rb 
+                WHERE rb.id_utilizador = ? AND rb.id_badge = b.id_badge AND (rb.deleted_registo IS NOT 1)
+                LIMIT 1),
+               (SELECT CASE 
+                         WHEN s.status = 'draft' THEN 'emProgresso'
+                         WHEN s.status = 'submitted' THEN 'pendentes'
+                         WHEN s.status = 'rejected' THEN 'recusados'
+                         ELSE 'disponivel'
+                       END
+                FROM ${DatabaseSchema.submissoesTable} s
+                WHERE s.id_utilizador = ? AND s.id_badge = b.id_badge AND (s.deleted_submissao IS NOT 1)
+                ORDER BY s.id_submissao_local DESC
+                LIMIT 1),
+               'disponivel'
+             ) as estado
+      FROM ${DatabaseSchema.badgesTable} b
+      LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      LEFT JOIN ${DatabaseSchema.niveisTable} n ON b.id_nivel = n.id_nivel
+      WHERE (b.deleted_badge IS NOT 1)
+    ''', [userAreaId, userId, userId]);
+
+    return rows.map((row) {
+      final isEspecial = (row['especial'] == 1 || row['especial'] == true);
+      final isMinhaArea = (row['minha_area'] == 1 || row['minha_area'] == true);
+      return {
+        'id_badge': row['id_badge'],
+        'titulo': row['nome_badge'] ?? '',
+        'nome_badge': row['nome_badge'] ?? '',
+        'imagem': row['imagem'],
+        'especial': isEspecial,
+        'minha_area': isMinhaArea,
+        'minhaArea': isMinhaArea,
+        'estado': row['estado'] ?? 'disponivel',
+        'progresso': 0, // default, progresso is used in Sugeridos
+        'areaNome': row['areaNome'] ?? 'Geral',
+        'nivelNome': row['nivelNome'] ?? 'Básico',
+        'pontos': row['pontos'] ?? 0,
+      };
+    }).toList();
+  }
+
+  /// Query Galeria B: Obter badges sugeridos locais (reproduzindo fn_sugerir_badges)
+  Future<List<Map<String, dynamic>>> obterBadgesSugeridos({
+    required int userId,
+    required int userAreaId,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      WITH
+      registos_mais_recentes AS (
+          SELECT id_registo, badge_id, id_utilizador, data_obtencao, expirado
+          FROM (
+              SELECT rb.id_registo, rb.id_badge AS badge_id, rb.id_utilizador, rb.data_obtencao, rb.expirado,
+                     ROW_NUMBER() OVER (PARTITION BY rb.id_badge ORDER BY rb.data_obtencao DESC, rb.id_registo DESC) as rn
+              FROM ${DatabaseSchema.registoBadgesTable} rb
+              WHERE rb.id_utilizador = ? AND (rb.deleted_registo IS NOT 1)
+          )
+          WHERE rn = 1
+      ),
+      submissoes_mais_recentes AS (
+          SELECT id_submissao, badge_id, status, data_submissao
+          FROM (
+              SELECT s.id_submissao, s.id_badge AS badge_id, s.status, s.data_submissao,
+                     ROW_NUMBER() OVER (PARTITION BY s.id_badge ORDER BY s.data_submissao DESC, s.id_submissao DESC) as rn
+              FROM ${DatabaseSchema.submissoesTable} s
+              WHERE s.id_utilizador = ? AND (s.deleted_submissao IS NOT 1)
+          )
+          WHERE rn = 1
+      ),
+      candidaturas_abertas AS (
+          SELECT smr.badge_id
+          FROM submissoes_mais_recentes smr
+          WHERE LOWER(TRIM(smr.status)) IN ('em_progresso', 'pendente', 'aceite talent', 'draft', 'submitted')
+      ),
+      badges_validos AS (
+          SELECT rmr.badge_id
+          FROM registos_mais_recentes rmr
+          INNER JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = rmr.badge_id
+          WHERE b.deleted_badge IS NOT 1
+            AND COALESCE(rmr.expirado, 0) = 0
+            AND (
+                  b.validade IS NULL
+                  OR datetime(rmr.data_obtencao, '+' || b.validade || ' day') >= datetime('now')
+            )
+      ),
+      sugestoes_expirados AS (
+          SELECT rmr.badge_id, 1 AS prioridade, 'O teu badge expirou. Renova-o!' AS motivo
+          FROM registos_mais_recentes rmr
+          INNER JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = rmr.badge_id
+          WHERE b.deleted_badge IS NOT 1
+            AND (
+                  COALESCE(rmr.expirado, 0) = 1
+                  OR (
+                      b.validade IS NOT NULL
+                      AND datetime(rmr.data_obtencao, '+' || b.validade || ' day') < datetime('now')
+                  )
+            )
+      ),
+      sugestoes_nivel_seguinte AS (
+          SELECT DISTINCT b.id_badge AS badge_id, 2 AS prioridade, 'Pronto para o próximo nível na tua área?' AS motivo
+          FROM ${DatabaseSchema.badgesTable} b
+          WHERE b.deleted_badge IS NOT 1
+            AND EXISTS (
+                  SELECT 1
+                  FROM ${DatabaseSchema.badgesTable} b_atual
+                  INNER JOIN badges_validos bv ON bv.badge_id = b_atual.id_badge
+                  WHERE b.id_area = b_atual.id_area
+                    AND b.id_nivel = b_atual.id_nivel + 1
+                    AND b_atual.deleted_badge IS NOT 1
+            )
+            AND NOT EXISTS (SELECT 1 FROM badges_validos bv WHERE bv.badge_id = b.id_badge)
+            AND NOT EXISTS (SELECT 1 FROM candidaturas_abertas ca WHERE ca.badge_id = b.id_badge)
+      ),
+      requisitos_aceites_consultor AS (
+          SELECT DISTINCT d.id_requisito
+          FROM ${DatabaseSchema.documentosSubmissaoTable} d
+          INNER JOIN ${DatabaseSchema.submissoesTable} s ON s.id_submissao_local = d.id_submissao_local
+          INNER JOIN ${DatabaseSchema.requisitosTable} r ON r.id_requisito = d.id_requisito
+          WHERE s.id_utilizador = ?
+            AND LOWER(TRIM(s.status)) IN ('aceite', 'approved')
+            AND d.deleted_file IS NOT 1
+            AND r.deleted_requisitos IS NOT 1
+      ),
+      sugestoes_requisitos_reutilizaveis AS (
+          SELECT DISTINCT b.id_badge AS badge_id, 3 AS prioridade, 'Podes reaproveitar evidências que já tens para obter este badge!' AS motivo
+          FROM ${DatabaseSchema.badgesTable} b
+          INNER JOIN ${DatabaseSchema.badgesRequisitosTable} rb_req ON rb_req.id_badge = b.id_badge
+          INNER JOIN ${DatabaseSchema.requisitosTable} r ON r.id_requisito = rb_req.id_requisito AND r.deleted_requisitos IS NOT 1
+          INNER JOIN requisitos_aceites_consultor rac ON rac.id_requisito = rb_req.id_requisito
+          WHERE b.deleted_badge IS NOT 1
+            AND NOT EXISTS (SELECT 1 FROM badges_validos bv WHERE bv.badge_id = b.id_badge)
+            AND NOT EXISTS (SELECT 1 FROM candidaturas_abertas ca WHERE ca.badge_id = b.id_badge)
+      ),
+      sugestoes_populares AS (
+          SELECT b.id_badge AS badge_id, 4 AS prioridade, 'Em destaque entre os colegas' AS motivo
+          FROM ${DatabaseSchema.badgesTable} b
+          INNER JOIN ${DatabaseSchema.registoBadgesTable} rb ON rb.id_badge = b.id_badge
+          WHERE b.deleted_badge IS NOT 1
+            AND NOT EXISTS (SELECT 1 FROM badges_validos bv WHERE bv.badge_id = b.id_badge)
+            AND NOT EXISTS (SELECT 1 FROM candidaturas_abertas ca WHERE ca.badge_id = b.id_badge)
+          GROUP BY b.id_badge
+          ORDER BY COUNT(rb.id_badge) DESC, b.id_badge DESC
+          LIMIT 10
+      ),
+      todas_sugestoes AS (
+          SELECT badge_id, prioridade, motivo FROM sugestoes_expirados
+          UNION ALL
+          SELECT badge_id, prioridade, motivo FROM sugestoes_nivel_seguinte
+          UNION ALL
+          SELECT badge_id, prioridade, motivo FROM sugestoes_requisitos_reutilizaveis
+          UNION ALL
+          SELECT badge_id, prioridade, motivo FROM sugestoes_populares
+      ),
+      sugestoes_numeradas AS (
+          SELECT badge_id, prioridade, motivo,
+                 ROW_NUMBER() OVER (PARTITION BY badge_id ORDER BY prioridade ASC) AS ordem_deduplicacao
+          FROM todas_sugestoes
+      ),
+      sugestoes_limpas AS (
+          SELECT badge_id, prioridade, motivo
+          FROM sugestoes_numeradas
+          WHERE ordem_deduplicacao = 1
+      ),
+      distribuicao AS (
+          SELECT badge_id, prioridade, motivo,
+                 ROW_NUMBER() OVER (PARTITION BY prioridade ORDER BY badge_id DESC) AS ordem_interna
+          FROM sugestoes_limpas
+      )
+      SELECT
+          d.badge_id AS id_badge,
+          b.nome_badge AS titulo,
+          b.especial,
+          b.imagem,
+          b.pontos_badge AS pontos,
+          a.nome_area AS categoria,
+          d.motivo AS justificacao,
+          (SELECT COUNT(*) FROM ${DatabaseSchema.badgesRequisitosTable} br WHERE br.id_badge = b.id_badge) as total_requisitos,
+          (SELECT COUNT(*) 
+           FROM ${DatabaseSchema.submissaoRequisitosTable} sr 
+           INNER JOIN ${DatabaseSchema.submissoesTable} s2 ON sr.id_submissao_local = s2.id_submissao_local
+           WHERE s2.id_utilizador = ? 
+             AND s2.id_badge = b.id_badge 
+             AND s2.status IN ('draft', 'submitted')
+             AND (s2.deleted_submissao IS NOT 1)
+             AND (sr.estado_local = 'uploaded' OR sr.estado_local = 'approved')
+          ) as requisitos_completos
+      FROM distribuicao d
+      INNER JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = d.badge_id
+      LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      WHERE b.id_badge NOT IN (
+        SELECT rb.id_badge 
+        FROM ${DatabaseSchema.registoBadgesTable} rb 
+        WHERE rb.id_utilizador = ? AND rb.expirado = 0 AND (rb.deleted_registo IS NOT 1)
+      )
+      ORDER BY
+          d.ordem_interna ASC,
+          d.prioridade ASC
+      LIMIT 8
+    ''', [userId, userId, userId, userId, userId, userId]);
+
+    return rows.map((row) {
+      final total = row['total_requisitos'] as int? ?? 0;
+      final completos = row['requisitos_completos'] as int? ?? 0;
+      final progressPercentage = total > 0 ? ((completos / total) * 100).toInt() : 0;
+
+      final isEspecial = (row['especial'] == 1 || row['especial'] == true);
+
+      return {
+        'id_badge': row['id_badge'],
+        'titulo': row['titulo'] ?? '',
+        'especial': isEspecial,
+        'imagem': row['imagem'],
+        'pontos': row['pontos'] ?? 0,
+        'categoria': row['categoria'] ?? 'Geral',
+        'justificacao': row['justificacao'] ?? '',
+        'progresso': progressPercentage,
+      };
+    }).toList();
+  }
 }
 
 typedef BadgeDao = BadgesDao;

@@ -233,7 +233,7 @@ class DocumentosSubmissaoDao {
   /// Batch upserts documents from sync.
   Future<void> upsertFromSync(List<Map<String, dynamic>> dados) async {
     final db = await DatabaseHelper.instance.database;
-    
+
     // Fetch all submissions to verify they exist locally and map remote_id -> local_id
     final submissoes = await db.query(
       DatabaseSchema.submissoesTable,
@@ -248,33 +248,39 @@ class DocumentosSubmissaoDao {
       }
     }
 
-    final batch = db.batch();
-    for (final raw in dados) {
-      final valFich = raw['id_ficheiro'] ?? raw['id_documento'] ?? raw['remote_id'] ?? raw['id'];
-      final idFicheiro = valFich != null ? int.tryParse(valFich.toString()) : null;
+    await db.transaction((txn) async {
+      for (final raw in dados) {
+        final valFich = raw['id_ficheiro'] ?? raw['id_documento'] ?? raw['remote_id'] ?? raw['id'];
+        final idFicheiro = valFich != null ? int.tryParse(valFich.toString()) : null;
 
-      final valReq = raw['id_requisito'] ?? raw['requisito_id'];
-      final idRequisito = valReq != null ? int.tryParse(valReq.toString()) : null;
+        final valReq = raw['id_requisito'] ?? raw['requisito_id'];
+        final idRequisito = valReq != null ? int.tryParse(valReq.toString()) : null;
 
-      final valSub = raw['id_submissao'] ?? raw['submissao_id'];
-      final remoteSubmissaoId = valSub != null ? int.tryParse(valSub.toString()) : null;
+        final valSub = raw['id_submissao'] ?? raw['submissao_id'];
+        final remoteSubmissaoId = valSub != null ? int.tryParse(valSub.toString()) : null;
 
-      if (idFicheiro == null || idRequisito == null || remoteSubmissaoId == null) {
-        print('⚠️ [DocumentosSubmissaoDao] Ignorado por ID nulo: $raw');
-        continue;
-      }
+        if (idFicheiro == null || idRequisito == null || remoteSubmissaoId == null) {
+          print('⚠️ [DocumentosSubmissaoDao] Ignorado por ID nulo: $raw');
+          continue;
+        }
 
-      final idSubmissaoLocal = remoteToLocalMap[remoteSubmissaoId];
-      if (idSubmissaoLocal == null) {
-        print('⚠️ [DocumentosSubmissaoDao] Ignorado: submissão local não encontrada para id_submissao remoto: $remoteSubmissaoId');
-        continue;
-      }
+        final idSubmissaoLocal = remoteToLocalMap[remoteSubmissaoId];
+        if (idSubmissaoLocal == null) {
+          print('⚠️ [DocumentosSubmissaoDao] Ignorado: submissão local não encontrada para id_submissao remoto: $remoteSubmissaoId');
+          continue;
+        }
 
-      final deletedFile = (raw['deleted_file'] == true || raw['deleted_file'] == 1 || raw['deleted_at'] != null) ? 1 : 0;
+        final deletedFile = (raw['deleted_file'] == true || raw['deleted_file'] == 1 || raw['deleted_at'] != null) ? 1 : 0;
 
-      batch.insert(
-        DatabaseSchema.documentosSubmissaoTable,
-        {
+        final existing = await txn.query(
+          DatabaseSchema.documentosSubmissaoTable,
+          columns: ['id_ficheiro_local'],
+          where: 'id_ficheiro = ?',
+          whereArgs: [idFicheiro],
+          limit: 1,
+        );
+
+        final values = {
           'id_ficheiro': idFicheiro,
           'id_submissao_local': idSubmissaoLocal,
           'id_requisito': idRequisito,
@@ -289,11 +295,23 @@ class DocumentosSubmissaoDao {
           'synced_at': raw['synced_at']?.toString() ?? utcNow(),
           'sync_status': 'synced',
           'deleted_file': deletedFile,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+        };
+
+        if (existing.isNotEmpty) {
+          await txn.update(
+            DatabaseSchema.documentosSubmissaoTable,
+            values,
+            where: 'id_ficheiro_local = ?',
+            whereArgs: [existing.first['id_ficheiro_local']],
+          );
+        } else {
+          await txn.insert(
+            DatabaseSchema.documentosSubmissaoTable,
+            values,
+          );
+        }
+      }
+    });
     _changes.add(-1);
   }
 

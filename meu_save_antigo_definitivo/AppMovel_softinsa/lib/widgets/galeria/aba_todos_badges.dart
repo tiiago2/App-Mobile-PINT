@@ -35,7 +35,7 @@ class AbaTodosBadges extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SearchBarFilter(
           hintText: AppLocalizations.of(context)?.pesquisarBadge ?? 'Pesquisar Badge...',
@@ -53,19 +53,19 @@ class AbaTodosBadges extends StatelessWidget {
         if (listaEspeciais.isNotEmpty) ...[
           DivisaoEspeciais(),
           const SizedBox(height: AppTamanhos.gapBadgesPessoais),
-          GaleriaBadgesComEstado(badges: listaEspeciais),
+          GaleriaBadgesComEstado(badges: listaEspeciais, centralizar: true),
           const SizedBox(height: AppTamanhos.gapBadgesPessoais),
         ],
         if (listaMinhaArea.isNotEmpty) ...[
           DivisaoMinhaArea(),
           const SizedBox(height: AppTamanhos.gapBadgesPessoais),
-          GaleriaBadgesComEstado(badges: listaMinhaArea),
+          GaleriaBadgesComEstado(badges: listaMinhaArea, centralizar: true),
           const SizedBox(height: AppTamanhos.gapBadgesPessoais),
         ],
         if (listaOutrasAreas.isNotEmpty) ...[
           DivisaoOutrasAreas(),
           const SizedBox(height: AppTamanhos.gapBadgesPessoais),
-          GaleriaBadgesComEstado(badges: listaOutrasAreas),
+          GaleriaBadgesComEstado(badges: listaOutrasAreas, centralizar: true),
         ],
       ],
     );

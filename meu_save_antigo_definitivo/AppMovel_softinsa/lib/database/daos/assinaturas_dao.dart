@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:sqflite/sqflite.dart';
 import '../database_helper.dart';
 import '../database_schema.dart';
 import '../sync_helpers.dart';
@@ -42,19 +41,25 @@ class AssinaturasDao {
   /// Batch upserts signatures from sync.
   Future<void> upsertFromSync(List<Map<String, dynamic>> records) async {
     final db = await DatabaseHelper.instance.database;
-    final batch = db.batch();
-    for (final raw in records) {
-      final idAssinatura = intOrNull(raw['id_assinatura'] ?? raw['id']);
-      final idProprietario = intOrNull(raw['id_proprietario'] ?? raw['proprietario_id'] ?? raw['user_id'] ?? raw['id_utilizador']);
+    await db.transaction((txn) async {
+      for (final raw in records) {
+        final idAssinatura = intOrNull(raw['id_assinatura'] ?? raw['id']);
+        final idProprietario = intOrNull(raw['id_proprietario'] ?? raw['proprietario_id'] ?? raw['user_id'] ?? raw['id_utilizador']);
 
-      if (idAssinatura == null || idProprietario == null) {
-        print('⚠️ [AssinaturasDao] Ignorado devido a chaves nulas: id_assinatura=$idAssinatura, id_proprietario=$idProprietario');
-        continue;
-      }
+        if (idAssinatura == null || idProprietario == null) {
+          print('⚠️ [AssinaturasDao] Ignorado devido a chaves nulas: id_assinatura=$idAssinatura, id_proprietario=$idProprietario');
+          continue;
+        }
 
-      batch.insert(
-        DatabaseSchema.assinaturaTable,
-        {
+        final existing = await txn.query(
+          DatabaseSchema.assinaturaTable,
+          columns: ['id_assinatura_local'],
+          where: 'id_proprietario = ?',
+          whereArgs: [idProprietario],
+          limit: 1,
+        );
+
+        final values = {
           'id_assinatura': idAssinatura,
           'id_proprietario': idProprietario,
           'assinatura_json': raw['assinatura_json'] ?? jsonEncode(raw),
@@ -62,11 +67,23 @@ class AssinaturasDao {
           'local_updated_at': DateTime.now().toIso8601String(),
           'server_updated_at': raw['updated_at']?.toString() ?? raw['criado_em']?.toString(),
           'sync_status': 'synced',
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+        };
+
+        if (existing.isNotEmpty) {
+          await txn.update(
+            DatabaseSchema.assinaturaTable,
+            values,
+            where: 'id_proprietario = ?',
+            whereArgs: [idProprietario],
+          );
+        } else {
+          await txn.insert(
+            DatabaseSchema.assinaturaTable,
+            values,
+          );
+        }
+      }
+    });
     _changes.add(-1);
   }
 
@@ -159,5 +176,44 @@ class AssinaturasDao {
 
     _changes.add(userId);
     return localId;
+  }
+
+  /// Query 2: Obter os IDs de badges associados à assinatura do utilizador
+  Future<List<int>> obterIdsBadgesAssinatura(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT ba.id_badge
+      FROM ${DatabaseSchema.badgesAssinaturaTable} ba
+      INNER JOIN ${DatabaseSchema.assinaturaTable} a ON ba.id_assinatura_local = a.id_assinatura_local
+      WHERE a.id_proprietario = ?
+    ''', [userId]);
+
+    return rows.map((row) => row['id_badge'] as int).toList();
+  }
+
+  /// Confirma a sincronização de assinaturas em lote após push sync com sucesso.
+  Future<void> confirmarSincronizacaoEmLote(Map<dynamic, dynamic> mapaIds) async {
+    final db = await DatabaseHelper.instance.database;
+    final batch = db.batch();
+
+    mapaIds.forEach((tempId, realId) {
+      final tId = intOrNull(tempId);
+      final rId = intOrNull(realId);
+      if (tId != null && rId != null) {
+        batch.update(
+          DatabaseSchema.assinaturaTable,
+          {
+            'id_assinatura': rId,
+            'sync_status': 'synced',
+            'local_updated_at': DateTime.now().toIso8601String(),
+          },
+          where: 'id_assinatura_local = ? OR id_proprietario = ?',
+          whereArgs: [tId, tId],
+        );
+      }
+    });
+
+    await batch.commit(noResult: true);
+    _changes.add(-1);
   }
 }

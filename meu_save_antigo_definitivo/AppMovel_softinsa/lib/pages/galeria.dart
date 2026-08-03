@@ -5,6 +5,7 @@ import '../widgets/galeria/aba_todos_badges.dart';
 import '../widgets/galeria/aba_sugeridos.dart';
 import '../widgets/searchbar_filter.dart';
 import '../idiomas/app_localizations.dart';
+import '../controllers/galeria_controller.dart';
 
 class GaleriaScreen extends StatefulWidget {
   final String filtroInicial;
@@ -24,6 +25,9 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
   void initState() {
     super.initState();
     _filtroSelecionado = widget.filtroInicial;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      GaleriaController.instance.carregarDados();
+    });
   }
 
   @override
@@ -34,123 +38,7 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
     }
   }
 
-  // --- MOCK DATA (temporário enquanto o login está desativado) ---
-  static const List<Map<String, dynamic>> _mockBadges = [
-    // Especiais
-    {
-      'titulo': 'Colaborador do Ano',
-      'imagem': null,
-      'especial': true,
-      'minha_area': false,
-      'estado': 'conquistados',
-      'progresso': 0,
-      'areaNome': 'Geral',
-      'nivelNome': 'Ouro',
-    },
-    {
-      'titulo': 'Top Formador',
-      'imagem': null,
-      'especial': true,
-      'minha_area': false,
-      'estado': 'bloqueados',
-      'progresso': 0,
-      'areaNome': 'Formação',
-      'nivelNome': 'Platina',
-    },
-    // Minha Área
-    {
-      'titulo': 'Flutter Expert',
-      'imagem': null,
-      'especial': false,
-      'minha_area': true,
-      'estado': 'conquistados',
-      'progresso': 0,
-      'areaNome': 'Desenvolvimento',
-      'nivelNome': 'Avançado',
-    },
-    {
-      'titulo': 'Code Reviewer',
-      'imagem': null,
-      'especial': false,
-      'minha_area': true,
-      'estado': 'emProgresso',
-      'progresso': 65,
-      'areaNome': 'Desenvolvimento',
-      'nivelNome': 'Intermédio',
-    },
-    {
-      'titulo': 'API Master',
-      'imagem': null,
-      'especial': false,
-      'minha_area': true,
-      'estado': 'pendentes',
-      'progresso': 0,
-      'areaNome': 'Desenvolvimento',
-      'nivelNome': 'Avançado',
-    },
-    {
-      'titulo': 'Bug Hunter',
-      'imagem': null,
-      'especial': false,
-      'minha_area': true,
-      'estado': 'disponivel',
-      'progresso': 0,
-      'areaNome': 'Desenvolvimento',
-      'nivelNome': 'Básico',
-    },
-    // Outras Áreas
-    {
-      'titulo': 'Vendas Pro',
-      'imagem': null,
-      'especial': false,
-      'minha_area': false,
-      'estado': 'bloqueados',
-      'progresso': 0,
-      'areaNome': 'Vendas',
-      'nivelNome': 'Avançado',
-    },
-    {
-      'titulo': 'Mentor',
-      'imagem': null,
-      'especial': false,
-      'minha_area': false,
-      'estado': 'disponivel',
-      'progresso': 0,
-      'areaNome': 'RH',
-      'nivelNome': 'Sénior',
-    },
-    {
-      'titulo': 'Inovador',
-      'imagem': null,
-      'especial': false,
-      'minha_area': false,
-      'estado': 'emProgresso',
-      'progresso': 30,
-      'areaNome': 'Produto',
-      'nivelNome': 'Intermédio',
-    },
-    {
-      'titulo': 'Formador',
-      'imagem': null,
-      'especial': false,
-      'minha_area': false,
-      'estado': 'expirados',
-      'progresso': 0,
-      'areaNome': 'Formação',
-      'nivelNome': 'Básico',
-    },
-    {
-      'titulo': 'Comunicador',
-      'imagem': null,
-      'especial': false,
-      'minha_area': false,
-      'estado': 'recusados',
-      'progresso': 0,
-      'areaNome': 'Marketing',
-      'nivelNome': 'Básico',
-    },
-  ];
-  // --------------------------------------------------------------
+
 
   List<Map<String, dynamic>> _filtrarBadges(List<Map<String, dynamic>> badges) {
     final query = _pesquisa.trim().toLowerCase();
@@ -282,105 +170,133 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
         ),
         actions: const [TopBarActions()],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {},
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(AppTamanhos.margemEcra),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                BarraDeSelecao(
-                  onSelectionChanged: (int index) {
-                    setState(() {
-                      _abaSelecionada = index;
-                    });
-                  },
+      body: AnimatedBuilder(
+        animation: GaleriaController.instance,
+        builder: (context, _) {
+          final controller = GaleriaController.instance;
+
+          if (controller.isLoading && controller.todosBadges.isEmpty) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppCores.azulFundo),
+            );
+          }
+
+          if (controller.errorMessage != null && controller.todosBadges.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Text(
+                  controller.errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 14.0),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: AppTamanhos.gapBadgesPessoais),
-                _abaSelecionada == 1
-                    ? Builder(
-                        builder: (context) {
-                          // 1. Get searched list of badges
-                          final badges = _filtrarBadges(_mockBadges);
+              ),
+            );
+          }
 
-                          // 2. Compute dynamic counts based on search query
-                          final int countTodos = badges.length;
-                          final int countConcluidos = badges.where((b) => b['estado'] == 'concluidos' || b['estado'] == 'conquistados').length;
-                          final int countExpirados = badges.where((b) => b['estado'] == 'expirados').length;
-                          final int countRecusados = badges.where((b) => b['estado'] == 'recusados' || b['estado'] == 'recusado').length;
-                          final int countPendentes = badges.where((b) => b['estado'] == 'pendentes').length;
-                          final int countEmProgresso = badges.where((b) => b['estado'] == 'emProgresso').length;
+          return RefreshIndicator(
+            onRefresh: () async {
+              await controller.carregarDados();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTamanhos.margemEcra),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BarraDeSelecao(
+                      onSelectionChanged: (int index) {
+                        setState(() {
+                          _abaSelecionada = index;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppTamanhos.gapBadgesPessoais),
+                    _abaSelecionada == 1
+                        ? Builder(
+                            builder: (context) {
+                              // 1. Get searched list of badges
+                              final badges = _filtrarBadges(controller.todosBadges);
 
-                          final Map<String, int> filtros = {
-                            'todos': countTodos,
-                            'concluidos': countConcluidos,
-                            'expirados': countExpirados,
-                            'recusados': countRecusados,
-                            'pendentes': countPendentes,
-                            'emProgresso': countEmProgresso,
-                          };
+                              // 2. Compute dynamic counts based on search query
+                              final int countTodos = badges.length;
+                              final int countConcluidos = badges.where((b) => b['estado'] == 'concluidos' || b['estado'] == 'conquistados').length;
+                              final int countExpirados = badges.where((b) => b['estado'] == 'expirados').length;
+                              final int countRecusados = badges.where((b) => b['estado'] == 'recusados' || b['estado'] == 'recusado').length;
+                              final int countPendentes = badges.where((b) => b['estado'] == 'pendentes').length;
+                              final int countEmProgresso = badges.where((b) => b['estado'] == 'emProgresso').length;
 
-                          // 3. Filter by current selected chip
-                          final filteredDisplay = badges.where((badge) {
-                            if (_filtroSelecionado == 'todos') return true;
-                            final estado = badge['estado']?.toString().toLowerCase();
-                            if (_filtroSelecionado == 'concluidos') return estado == 'concluidos' || estado == 'conquistados';
-                            if (_filtroSelecionado == 'expirados') return estado == 'expirados';
-                            if (_filtroSelecionado == 'recusados') return estado == 'recusados' || estado == 'recusado';
-                            if (_filtroSelecionado == 'pendentes') return estado == 'pendentes';
-                            if (_filtroSelecionado == 'emProgresso') return estado == 'emprogresso';
-                            return true;
-                          }).toList();
+                              final Map<String, int> filtros = {
+                                'todos': countTodos,
+                                'concluidos': countConcluidos,
+                                'expirados': countExpirados,
+                                'recusados': countRecusados,
+                                'pendentes': countPendentes,
+                                'emProgresso': countEmProgresso,
+                              };
 
-                          final listaEspeciais =
-                              filteredDisplay.where(_isEspecial).toList();
-                          final listaMinhaArea = filteredDisplay
-                              .where(
-                                (badge) =>
-                                    !_isEspecial(badge) &&
-                                    _isMinhaArea(badge),
-                              )
-                              .toList();
-                          final listaOutrasAreas = filteredDisplay
-                              .where(
-                                (badge) =>
-                                    !_isEspecial(badge) &&
-                                    !_isMinhaArea(badge),
-                              )
-                              .toList();
+                              // 3. Filter by current selected chip
+                              final filteredDisplay = badges.where((badge) {
+                                if (_filtroSelecionado == 'todos') return true;
+                                final estado = badge['estado']?.toString().toLowerCase();
+                                if (_filtroSelecionado == 'concluidos') return estado == 'concluidos' || estado == 'conquistados';
+                                if (_filtroSelecionado == 'expirados') return estado == 'expirados';
+                                if (_filtroSelecionado == 'recusados') return estado == 'recusados' || estado == 'recusado';
+                                if (_filtroSelecionado == 'pendentes') return estado == 'pendentes';
+                                if (_filtroSelecionado == 'emProgresso') return estado == 'emprogresso';
+                                return true;
+                              }).toList();
 
-                          return AbaTodosBadges(
-                            listaEspeciais: listaEspeciais,
-                            listaMinhaArea: listaMinhaArea,
-                            listaOutrasAreas: listaOutrasAreas,
-                            filtroSelecionado: _filtroSelecionado,
-                            filtros: filtros,
-                            onFilterChanged: (newFilter) {
-                              setState(() {
-                                _filtroSelecionado = newFilter;
-                              });
+                              final listaEspeciais =
+                                  filteredDisplay.where(_isEspecial).toList();
+                              final listaMinhaArea = filteredDisplay
+                                  .where(
+                                    (badge) =>
+                                        !_isEspecial(badge) &&
+                                        _isMinhaArea(badge),
+                                  )
+                                  .toList();
+                              final listaOutrasAreas = filteredDisplay
+                                  .where(
+                                    (badge) =>
+                                        !_isEspecial(badge) &&
+                                        !_isMinhaArea(badge),
+                                  )
+                                  .toList();
+
+                              return AbaTodosBadges(
+                                listaEspeciais: listaEspeciais,
+                                listaMinhaArea: listaMinhaArea,
+                                listaOutrasAreas: listaOutrasAreas,
+                                filtroSelecionado: _filtroSelecionado,
+                                filtros: filtros,
+                                onFilterChanged: (newFilter) {
+                                  setState(() {
+                                    _filtroSelecionado = newFilter;
+                                  });
+                                },
+                                onSearchChanged: (value) {
+                                  setState(() {
+                                    _pesquisa = value;
+                                  });
+                                },
+                                filterOptions: _filterOptions,
+                                onFilterOptionsChanged: (newOptions) {
+                                  setState(() {
+                                    _filterOptions = newOptions;
+                                  });
+                                },
+                              );
                             },
-                            onSearchChanged: (value) {
-                              setState(() {
-                                _pesquisa = value;
-                              });
-                            },
-                            filterOptions: _filterOptions,
-                            onFilterOptionsChanged: (newOptions) {
-                              setState(() {
-                                _filterOptions = newOptions;
-                              });
-                            },
-                          );
-                        },
-                      )
-                    : const AbaSugeridos(),
-              ],
+                          )
+                        : AbaSugeridos(sugeridos: controller.sugeridosBadges),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

@@ -26,6 +26,7 @@ class BadgeProgressCard extends StatelessWidget {
   final Color avatarColor;
   final int progressoPercent;
   final bool especial;
+  final String? justificacao;
 
   const BadgeProgressCard({
     super.key,
@@ -37,6 +38,7 @@ class BadgeProgressCard extends StatelessWidget {
     required this.avatarColor,
     required this.progressoPercent,
     this.especial = false,
+    this.justificacao,
   });
 
   // ---------------------------------------------------------------------------
@@ -251,6 +253,17 @@ class BadgeProgressCard extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (justificacao != null && justificacao!.isNotEmpty) ...[
+                              const SizedBox(height: 4.0),
+                              Text(
+                                justificacao!,
+                                style: const TextStyle(
+                                  fontSize: 12.0,
+                                  color: Color(0xFFF39C12),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

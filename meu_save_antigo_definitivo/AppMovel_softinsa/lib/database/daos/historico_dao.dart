@@ -52,14 +52,17 @@ class HistoricoDao {
     
     final batch = db.batch();
     for (final raw in dados) {
+      final valHist = raw['id_historico'] ?? raw['id'] ?? raw['remote_id'];
+      final idHistorico = valHist != null ? int.tryParse(valHist.toString()) : null;
+
       final valUser = raw['id_utilizador'] ?? raw['user_id'];
       final idUtilizador = valUser != null ? int.tryParse(valUser.toString()) : null;
 
       final valSub = raw['id_submissao'] ?? raw['submissao_id'] ?? raw['id_submissao_local'];
       final remoteSubmissaoId = valSub != null ? int.tryParse(valSub.toString()) : null;
 
-      if (idUtilizador == null || remoteSubmissaoId == null) {
-        print('⚠️ [HistoricoDao] Ignorado por ID nulo: $raw');
+      if (idHistorico == null || idUtilizador == null || remoteSubmissaoId == null) {
+        print('⚠️ [HistoricoDao] Ignorado por ID nulo: id_historico=$idHistorico, id_utilizador=$idUtilizador, id_submissao=$remoteSubmissaoId');
         continue;
       }
 
@@ -68,6 +71,7 @@ class HistoricoDao {
       final dataAvaliacao = raw['data_avaliacao']?.toString() ?? raw['timestamp_historico']?.toString() ?? utcNow();
 
       final cleanRow = {
+        'id_historico': idHistorico,
         'id_utilizador': idUtilizador,
         'id_submissao': remoteSubmissaoId,
         'aceite': aceite,

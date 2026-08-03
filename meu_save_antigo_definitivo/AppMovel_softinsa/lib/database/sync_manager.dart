@@ -154,6 +154,13 @@ class SyncManager {
       if (response != null && response['success'] == true) {
         final processedIds = response['processed_ids'] as Map<String, dynamic>? ?? {};
 
+        if (processedIds.containsKey('assinatura') || processedIds.containsKey('assinaturas')) {
+          final mapaAssinaturas = processedIds['assinatura'] ?? processedIds['assinaturas'];
+          if (mapaAssinaturas is Map && mapaAssinaturas.isNotEmpty) {
+            await _assinaturasDao.confirmarSincronizacaoEmLote(mapaAssinaturas);
+          }
+        }
+
         await db.transaction((txn) async {
           // 1. Atualizar IDs locais com IDs do servidor nas tabelas de dados
           for (final entry in processedIds.entries) {
