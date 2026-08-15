@@ -199,6 +199,7 @@ class BadgesDao {
       'pontos': row['pontos_badge'],
       'dataAquisicao': row['data_obtencao'],
       'validadeDias': row['validade'],
+      'estado': 'conquistados',
     }).toList();
   }
 
@@ -547,6 +548,39 @@ class BadgesDao {
         'progresso': progressPercentage,
       };
     }).toList();
+  }
+
+  Future<String> obterEstadoDeUmBadge(int userId, int badgeId) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT COALESCE(
+        (SELECT CASE 
+                  WHEN rb.expirado = 1 
+                  THEN 'expirados' 
+                  ELSE 'conquistados' 
+                END 
+         FROM ${DatabaseSchema.registoBadgesTable} rb 
+         WHERE rb.id_utilizador = ? AND rb.id_badge = ? AND (rb.deleted_registo IS NOT 1)
+         ORDER BY rb.data_obtencao DESC, rb.id_registo DESC
+         LIMIT 1),
+        (SELECT CASE 
+                  WHEN LOWER(TRIM(s.status)) IN ('rascunho', 'draft', 'em_progresso') THEN 'emProgresso'
+                  WHEN LOWER(TRIM(s.status)) IN ('submetida_pendente', 'pendente', 'submitted', 'aceite talent') THEN 'pendentes'
+                  WHEN LOWER(TRIM(s.status)) IN ('rejeitado', 'rejeitada', 'reprovado', 'reprovada', 'recusado', 'recusada', 'rejected') THEN 'recusados'
+                  ELSE 'disponivel'
+                END
+         FROM ${DatabaseSchema.submissoesTable} s
+         WHERE s.id_utilizador = ? AND s.id_badge = ? AND (s.deleted_submissao IS NOT 1)
+         ORDER BY s.id_submissao_local DESC
+         LIMIT 1),
+        'disponivel'
+      ) as estado
+    ''', [userId, badgeId, userId, badgeId]);
+    
+    if (rows.isNotEmpty) {
+      return rows.first['estado']?.toString() ?? 'disponivel';
+    }
+    return 'disponivel';
   }
 }
 

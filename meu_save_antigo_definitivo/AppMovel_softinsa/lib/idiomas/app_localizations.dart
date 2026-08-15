@@ -1209,6 +1209,36 @@ abstract class AppLocalizations {
   /// In pt, this message translates to:
   /// **'Data Limite'**
   String get dataLimite;
+
+  /// No description provided for @saudacao_1.
+  ///
+  /// In pt, this message translates to:
+  /// **'Bem-vindo ao teu portal de Badges!'**
+  String get saudacao_1;
+
+  /// No description provided for @saudacao_15.
+  ///
+  /// In pt, this message translates to:
+  /// **'Já tínhamos saudades tuas! Bem-vindo de volta!'**
+  String get saudacao_15;
+
+  /// No description provided for @saudacao_dia.
+  ///
+  /// In pt, this message translates to:
+  /// **'Bom dia!'**
+  String get saudacao_dia;
+
+  /// No description provided for @saudacao_tarde.
+  ///
+  /// In pt, this message translates to:
+  /// **'Boa tarde!'**
+  String get saudacao_tarde;
+
+  /// No description provided for @saudacao_noite.
+  ///
+  /// In pt, this message translates to:
+  /// **'Boa noite!'**
+  String get saudacao_noite;
 }
 
 class _AppLocalizationsDelegate

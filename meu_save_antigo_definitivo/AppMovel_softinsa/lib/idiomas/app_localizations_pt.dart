@@ -577,4 +577,19 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get dataLimite => 'Data Limite';
+
+  @override
+  String get saudacao_1 => 'Bem-vindo ao teu portal de Badges!';
+
+  @override
+  String get saudacao_15 => 'Já tínhamos saudades tuas! Bem-vindo de volta!';
+
+  @override
+  String get saudacao_dia => 'Bom dia!';
+
+  @override
+  String get saudacao_tarde => 'Boa tarde!';
+
+  @override
+  String get saudacao_noite => 'Boa noite!';
 }

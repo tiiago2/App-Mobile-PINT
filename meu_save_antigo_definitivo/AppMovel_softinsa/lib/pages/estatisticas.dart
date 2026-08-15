@@ -62,12 +62,13 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       final totalBadgesRes = await db.rawQuery('SELECT COUNT(*) as cnt FROM badges WHERE deleted_badge = 0');
       final totalBadges = Sqflite.firstIntValue(totalBadgesRes) ?? 0;
 
-      // 2. Classificação Geral e Lugar Geral (outros_users ordenado por pontos_totais)
+      // 2. Classificação Geral e Lugar Geral (outros_users ordenado por pontos_totais, associado a service_lines)
       final ouRows = await db.rawQuery('''
         SELECT ou.id_utilizador, ou.nome_user, ou.imagem_perfil, ou.pontos_semana, ou.pontos_mes, ou.pontos_ano, ou.pontos_totais, ou.ativo,
-               a.nome_area
+               a.nome_area, sl.nome_service_line
         FROM outros_users ou
         LEFT JOIN areas a ON ou.id_area = a.id_area
+        LEFT JOIN service_lines sl ON a.id_service_line = sl.id_service_line
         WHERE ou.ativo = 1
       ''');
 
@@ -77,6 +78,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
           'id': r['id_utilizador'],
           'nome': r['nome_user'] ?? '',
           'area': r['nome_area'] ?? '',
+          'service_line': r['nome_service_line'] ?? '',
           'pontos_semana': r['pontos_semana'] ?? 0,
           'pontos_mes': r['pontos_mes'] ?? 0,
           'pontos_ano': r['pontos_ano'] ?? 0,
@@ -92,16 +94,26 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
           final perfilMap = await PerfilDao.instance.lerPerfilDoUtilizador(userId);
           if (perfilMap != null) {
             String areaNome = '';
-            final areaId = perfilMap['area'];
+            String serviceLineNome = '';
+            final areaId = perfilMap['area'] ?? perfilMap['id_area'];
             if (areaId != null) {
-              final areaRow = await db.rawQuery('SELECT nome_area FROM areas WHERE id_area = ?', [areaId]);
-              if (areaRow.isNotEmpty) areaNome = areaRow.first['nome_area']?.toString() ?? '';
+              final areaRow = await db.rawQuery('''
+                SELECT a.nome_area, sl.nome_service_line 
+                FROM areas a
+                LEFT JOIN service_lines sl ON a.id_service_line = sl.id_service_line
+                WHERE a.id_area = ?
+              ''', [areaId]);
+              if (areaRow.isNotEmpty) {
+                areaNome = areaRow.first['nome_area']?.toString() ?? '';
+                serviceLineNome = areaRow.first['nome_service_line']?.toString() ?? '';
+              }
             }
 
             todosUsers.add({
               'id': userId,
               'nome': perfilMap['nome'] ?? 'Eu',
               'area': areaNome,
+              'service_line': serviceLineNome,
               'pontos_semana': 0,
               'pontos_mes': 0,
               'pontos_ano': 0,
@@ -757,7 +769,6 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
     required String value,
   }) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 8,
@@ -768,14 +779,19 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          '$label: ',
-          style: const TextStyle(
-            color: AppCores.fontes,
-            fontSize: 12.0,
-            fontWeight: FontWeight.w500,
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppCores.fontes,
+              fontSize: 12.0,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
+        const SizedBox(width: 8),
         Text(
           value,
           style: const TextStyle(
@@ -1516,7 +1532,7 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
   String _periodo = 'sempre';
   bool _subMenuAberto = false;
 
-  final List<String> _filtroOpcoes = const ['area', 'service_line', 'funcao'];
+  final List<String> _filtroOpcoes = const ['area', 'service_line'];
   final List<String> _periodoOpcoes = const ['semana', 'mes', 'ano', 'sempre'];
 
   List<Map<String, dynamic>> get _listaOrdenada {
@@ -1860,16 +1876,24 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
               ),
             ),
           ),
-          ...valores.map((val) {
-            return _buildSubMenuItem(
-              label: val,
-              selected: _filtroValor == val,
-              onTap: () => setState(() {
-                _filtroValor = val;
-                _subMenuAberto = false;
-              }),
-            );
-          }),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: valores.map((val) {
+                  return _buildSubMenuItem(
+                    label: val,
+                    selected: _filtroValor == val,
+                    onTap: () => setState(() {
+                      _filtroValor = val;
+                      _subMenuAberto = false;
+                    }),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
         ],
       ),
     );

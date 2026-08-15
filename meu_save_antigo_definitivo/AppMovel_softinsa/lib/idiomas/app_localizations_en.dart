@@ -573,4 +573,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dataLimite => 'Deadline';
+
+  @override
+  String get saudacao_1 => 'Welcome to your Badges portal!';
+
+  @override
+  String get saudacao_15 => 'We missed you! Welcome back!';
+
+  @override
+  String get saudacao_dia => 'Good morning!';
+
+  @override
+  String get saudacao_tarde => 'Good afternoon!';
+
+  @override
+  String get saudacao_noite => 'Good evening!';
 }

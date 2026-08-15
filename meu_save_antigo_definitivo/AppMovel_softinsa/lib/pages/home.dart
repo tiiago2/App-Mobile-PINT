@@ -10,6 +10,9 @@ import 'badge_detalhe.dart';
 import 'estatisticas.dart';
 import '../database/database_helper.dart';
 import '../database/daos/perfil_dao.dart';
+import '../database/daos/badges_dao.dart';
+import '../database/daos/sync_outbox_dao.dart';
+import '../database/sync_manager.dart';
 import '../controllers/auth_controller.dart';
 import '../database/sync_helpers.dart';
 
@@ -21,16 +24,38 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? _lastLoginStr;
+
   // ── Saudação Dinâmica ─────────────────────────────────────────────────────
   String _getGreeting(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return l10n?.homeBomDia ?? 'Bom Dia!';
-    } else if (hour < 20) {
-      return l10n?.homeBoaTarde ?? 'Boa Tarde!';
+    if (l10n == null) return 'Bom dia!';
+
+    final lastLoginStr = _lastLoginStr;
+    if (lastLoginStr == null || lastLoginStr.isEmpty) {
+      return l10n.saudacao_1;
+    }
+
+    final DateTime? lastLogin = DateTime.tryParse(lastLoginStr);
+    if (lastLogin == null) {
+      return l10n.saudacao_1;
+    }
+
+    final DateTime now = DateTime.now();
+    final int hour = now.hour;
+
+    // Diferença em milissegundos
+    final difference = now.difference(lastLogin).abs();
+    final double daysPassed = difference.inMilliseconds / (1000 * 60 * 60 * 24);
+
+    if (daysPassed >= 15) {
+      return l10n.saudacao_15;
+    } else if (hour < 6 || hour > 19) {
+      return l10n.saudacao_noite;
+    } else if (hour < 12) {
+      return l10n.saudacao_dia;
     } else {
-      return l10n?.homeBoaNoite ?? 'Boa Noite!';
+      return l10n.saudacao_tarde;
     }
   }
 
@@ -52,6 +77,36 @@ class _HomeScreenState extends State<HomeScreen> {
       final user = AuthController.instance.currentUser;
       final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
       final db = await DatabaseHelper.instance.database;
+
+      String? lastLoginStr;
+      if (userId != null) {
+        final perfilMap = await PerfilDao.instance.lerPerfilDoUtilizador(userId);
+        if (perfilMap != null) {
+          lastLoginStr = perfilMap['last_login']?.toString();
+        }
+
+        // 1. Atualizar last_login localmente no SQLite
+        final String nowStr = DateTime.now().toIso8601String();
+        await db.update(
+          'perfil',
+          {'last_login': nowStr},
+          where: 'id_utilizador = ?',
+          whereArgs: [userId],
+        );
+
+        // 2. Registar na sync_outbox
+        await SyncOutboxDao.instance.adicionarOperacao(
+          userId: userId,
+          entity: 'last_login',
+          operation: 'update',
+          localRecordId: userId,
+          clientId: generateClientId(),
+          payload: {'id': userId, 'last_login': nowStr},
+        );
+
+        // 3. Disparar sincronização
+        SyncManager.instance.syncAll(userId);
+      }
 
       // 1. Objetivos Propostos Ativos (Não concluídos e Não expirados)
       final DateTime now = DateTime.now();
@@ -77,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (dataFinal != null) {
               final daysLeft = dataFinal.difference(now).inDays + 1;
               if (daysLeft > 0) {
-                final badgeId = r['id_badge'];
+                final int badgeId = r['id_badge'] as int;
 
                 final subRes = await db.rawQuery('''
                   SELECT id_submissao, id_submissao_local
@@ -140,6 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   deadlineFormatada = dataFinalStr ?? '';
                 }
 
+                final badgeEstado = await BadgesDao.instance.obterEstadoDeUmBadge(userId, badgeId);
+
                 objetivosHome.add({
                   'titulo': r['nome_badge'] ?? '',
                   'categoria': r['nome_area'] ?? 'Geral',
@@ -151,6 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   'id': badgeId,
                   'imagem': r['imagem'],
                   'especial': r['especial'] == 1,
+                  'estado': badgeEstado,
                 });
               }
             }
@@ -228,12 +286,13 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      // 3. Classificação Geral (Leaderboard real do SQLite)
+      // 3. Classificação Geral (Leaderboard real do SQLite associado a service_lines)
       final ouRows = await db.rawQuery('''
         SELECT ou.id_utilizador, ou.nome_user, ou.imagem_perfil, ou.pontos_semana, ou.pontos_mes, ou.pontos_ano, ou.pontos_totais, ou.ativo,
-               a.nome_area
+               a.nome_area, sl.nome_service_line
         FROM outros_users ou
         LEFT JOIN areas a ON ou.id_area = a.id_area
+        LEFT JOIN service_lines sl ON a.id_service_line = sl.id_service_line
         WHERE ou.ativo = 1
       ''');
 
@@ -243,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'id': r['id_utilizador'],
           'nome': r['nome_user'] ?? '',
           'area': r['nome_area'] ?? '',
-          'service_line': '',
+          'service_line': r['nome_service_line'] ?? '',
           'funcao': '',
           'pontos_semana': r['pontos_semana'] ?? 0,
           'pontos_mes': r['pontos_mes'] ?? 0,
@@ -260,17 +319,26 @@ class _HomeScreenState extends State<HomeScreen> {
           final perfilMap = await PerfilDao.instance.lerPerfilDoUtilizador(userId);
           if (perfilMap != null) {
             String areaNome = '';
-            final areaId = perfilMap['area'];
+            String serviceLineNome = '';
+            final areaId = perfilMap['area'] ?? perfilMap['id_area'];
             if (areaId != null) {
-              final areaRow = await db.rawQuery('SELECT nome_area FROM areas WHERE id_area = ?', [areaId]);
-              if (areaRow.isNotEmpty) areaNome = areaRow.first['nome_area']?.toString() ?? '';
+              final areaRow = await db.rawQuery('''
+                SELECT a.nome_area, sl.nome_service_line 
+                FROM areas a
+                LEFT JOIN service_lines sl ON a.id_service_line = sl.id_service_line
+                WHERE a.id_area = ?
+              ''', [areaId]);
+              if (areaRow.isNotEmpty) {
+                areaNome = areaRow.first['nome_area']?.toString() ?? '';
+                serviceLineNome = areaRow.first['nome_service_line']?.toString() ?? '';
+              }
             }
 
             todosUsers.add({
               'id': userId,
               'nome': perfilMap['nome'] ?? 'Eu',
               'area': areaNome,
-              'service_line': '',
+              'service_line': serviceLineNome,
               'funcao': '',
               'pontos_semana': intOrNull(perfilMap['pontos_semana']) ?? 0,
               'pontos_mes': intOrNull(perfilMap['pontos_mes']) ?? 0,
@@ -314,6 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _objetivosHome = objetivosHome;
           _badgesEmProgresso = badgesEmProgresso;
           _ranking = ranking;
+          _lastLoginStr = lastLoginStr;
           _isLoading = false;
         });
       }

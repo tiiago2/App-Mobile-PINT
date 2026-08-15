@@ -184,5 +184,10 @@
   "abrilAbbr": "Abr",
   "maioAbbr": "May",
   "junhoAbbr": "Jun",
-  "dataLimite": "Fecha límite"
+  "dataLimite": "Fecha límite",
+  "saudacao_1": "¡Bienvenido a tu portal de Badges!",
+  "saudacao_15": "¡Te extrañamos! ¡Bienvenido de nuevo!",
+  "saudacao_dia": "¡Buenos días!",
+  "saudacao_tarde": "¡Buenas tardes!",
+  "saudacao_noite": "¡Buenas noches!"
 }

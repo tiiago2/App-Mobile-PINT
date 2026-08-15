@@ -184,5 +184,10 @@
   "abrilAbbr": "Apr",
   "maioAbbr": "May",
   "junhoAbbr": "Jun",
-  "dataLimite": "Deadline"
+  "dataLimite": "Deadline",
+  "saudacao_1": "Welcome to your Badges portal!",
+  "saudacao_15": "We missed you! Welcome back!",
+  "saudacao_dia": "Good morning!",
+  "saudacao_tarde": "Good afternoon!",
+  "saudacao_noite": "Good evening!"
 }

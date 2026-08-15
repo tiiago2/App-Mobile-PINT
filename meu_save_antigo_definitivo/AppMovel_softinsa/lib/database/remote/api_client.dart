@@ -553,4 +553,17 @@ class ApiClient {
     }
     return clone;
   }
+
+  Future<bool> atualizarLastLogin(int userId) async {
+    try {
+      final response = await _dio.put(
+        'https://pint-he77.onrender.com/api/putlastlogin',
+        data: {'id': userId},
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('❌ [ApiClient] Erro ao atualizar last login no servidor: $e');
+      return false;
+    }
+  }
 }

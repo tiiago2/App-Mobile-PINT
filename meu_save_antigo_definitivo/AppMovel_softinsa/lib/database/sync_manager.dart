@@ -108,6 +108,18 @@ class SyncManager {
 
         if (entity == 'documentos_submissao' || (entity == 'perfil' && row['operation'] == 'update_foto')) continue;
 
+        if (entity == 'last_login') {
+          debugPrint('🔄 [SyncManager] A sincronizar last_login para o utilizador $userId...');
+          final success = await _api.atualizarLastLogin(userId);
+          if (success) {
+            await SyncOutboxDao.instance.marcarComoConcluida(row['id'] as String);
+            debugPrint('✅ [SyncManager] last_login sincronizado com sucesso.');
+          } else {
+            debugPrint('❌ [SyncManager] Falha ao sincronizar last_login.');
+          }
+          continue;
+        }
+
         // Guarda: se a operação de perfil 'update' ainda tiver um caminho de foto local
         // (não-HTTPS), significa que o pré-upload para Cloudinary falhou ou ainda não ocorreu.
         // Neste caso, ignoramos esta operação neste ciclo de sync para evitar enviar um
