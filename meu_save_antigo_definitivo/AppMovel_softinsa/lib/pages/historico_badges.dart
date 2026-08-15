@@ -5,6 +5,10 @@ import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 import '../widgets/top_bar_actions.dart';
 import 'badge_detalhe.dart';
+import '../database/database_helper.dart';
+import '../database/database_schema.dart';
+import '../database/sync_helpers.dart';
+import '../controllers/auth_controller.dart';
 
 class HistoricoBadgesScreen extends StatefulWidget {
   const HistoricoBadgesScreen({super.key});
@@ -16,110 +20,96 @@ class HistoricoBadgesScreen extends StatefulWidget {
 class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
   String _selectedTab = 'Todos'; // 'Todos', 'Ativos', 'Expirados'
 
-  // --- MOCK DATA (Histórico de Badges) ---
-  final List<Map<String, dynamic>> _mockHistorico = [
-    {
-      'titulo': 'Git & Version Control',
-      'categoria': 'Development Tools',
-      'pontos': 100,
-      'imagem': null,
-      'avatarColor': const Color(0xFF10B981),
-      'especial': false,
-      'estado': 'conquistado',
-      'ativo': true,
-      'obtido': '16/12/2022',
-      'validade': '16/12/2028',
-    },
-    {
-      'titulo': 'Scrum Master Básico',
-      'categoria': 'Low Code',
-      'pontos': 150,
-      'imagem': null,
-      'avatarColor': const Color(0xFFFBBF24),
-      'especial': false,
-      'estado': 'expirado',
-      'ativo': false,
-      'obtido': '20/01/2023',
-      'validade': '20/01/2026',
-      'aviso': 'Este Badge expirou em 20/01/2026. Para manteres as tuas competências atualizadas, é necessário renovar o badge.',
-    },
-    {
-      'titulo': 'Low Code Pro',
-      'categoria': 'Low Code',
-      'pontos': 350,
-      'imagem': null,
-      'avatarColor': const Color(0xFF3B82F6),
-      'especial': true,
-      'estado': 'expirado',
-      'ativo': false,
-      'obtido': '24/02/2023',
-      'validade': '24/02/2026',
-      'aviso': 'Este Badge expirou em 24/02/2026. Para manteres as tuas competências atualizadas, é necessário renovar o badge.',
-    },
-    {
-      'titulo': 'OutSystems Fundamentals',
-      'categoria': 'Low Code',
-      'pontos': 50,
-      'imagem': null,
-      'avatarColor': const Color(0xFF39639C),
-      'especial': false,
-      'estado': 'conquistado',
-      'ativo': true,
-      'obtido': '15/06/2025',
-      'validade': '15/06/2029',
-    },
-    {
-      'titulo': 'OutSystems Dev',
-      'categoria': 'Low Code',
-      'pontos': 200,
-      'imagem': null,
-      'avatarColor': const Color(0xFFEC4899),
-      'especial': false,
-      'estado': 'conquistado',
-      'ativo': true,
-      'obtido': '19/11/2025',
-      'validade': '19/11/2026',
-    },
-    {
-      'titulo': 'Cloud Essentials',
-      'categoria': 'Cloud Computing',
-      'pontos': 150,
-      'imagem': null,
-      'avatarColor': const Color(0xFF8B5CF6),
-      'especial': false,
-      'estado': 'conquistado',
-      'ativo': true,
-      'obtido': '10/01/2026',
-      'validade': '10/01/2030',
-    },
-    {
-      'titulo': 'Mobile Dev',
-      'categoria': 'Mobile Dev',
-      'pontos': 120,
-      'imagem': null,
-      'avatarColor': const Color(0xFF06B6D4),
-      'especial': false,
-      'estado': 'conquistado',
-      'ativo': true,
-      'obtido': '05/02/2026',
-      'validade': '05/02/2027',
-    },
-  ];
+  List<Map<String, dynamic>> _historicoReal = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarHistorico();
+  }
+
+  Future<void> _carregarHistorico() async {
+    final user = AuthController.instance.currentUser;
+    final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
+    if (userId != null && userId > 0) {
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.rawQuery('''
+        SELECT rb.data_obtencao, rb.expirado, b.id_badge, b.nome_badge, b.imagem, b.pontos_badge, b.validade, b.especial, a.nome_area
+        FROM ${DatabaseSchema.registoBadgesTable} rb
+        INNER JOIN ${DatabaseSchema.badgesTable} b ON rb.id_badge = b.id_badge
+        LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+        WHERE rb.id_utilizador = ? AND (rb.deleted_registo IS NOT 1) AND (b.deleted_badge IS NOT 1)
+        ORDER BY rb.data_obtencao DESC
+      ''', [userId]);
+
+      final mapped = rows.map((row) {
+        final dataObtencaoStr = row['data_obtencao']?.toString() ?? '';
+        final validadeDias = intOrNull(row['validade']);
+        final expirado = row['expirado'] == 1;
+
+        String validadeStr = '';
+        if (validadeDias != null && dataObtencaoStr.isNotEmpty) {
+          try {
+            final date = DateTime.parse(dataObtencaoStr);
+            validadeStr = date.add(Duration(days: validadeDias)).toString().substring(0, 10);
+          } catch (_) {}
+        }
+
+        final colors = [
+          const Color(0xFF39639C), // Azul
+          const Color(0xFF10B981), // Verde
+          const Color(0xFF8B5CF6), // Roxo
+          const Color(0xFFF97316), // Laranja
+          const Color(0xFF06B6D4), // Ciano
+        ];
+        final badgeId = intOrNull(row['id_badge']) ?? 0;
+        final avatarColor = colors[badgeId % colors.length];
+
+        return {
+          'id': row['id_badge'],
+          'titulo': row['nome_badge'] ?? '',
+          'categoria': row['nome_area'] ?? 'Geral',
+          'pontos': intOrNull(row['pontos_badge']) ?? 0,
+          'imagem': row['imagem'],
+          'avatarColor': avatarColor,
+          'especial': row['especial'] == 1,
+          'estado': expirado ? 'expirado' : 'conquistado',
+          'ativo': !expirado,
+          'obtido': dataObtencaoStr.length > 10 ? dataObtencaoStr.substring(0, 10) : dataObtencaoStr,
+          'validade': validadeStr,
+        };
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _historicoReal = mapped;
+          _isLoading = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   // ── Filtragem dos Badges para a Timeline ──────────────────────────────────
   List<Map<String, dynamic>> get _badgesFiltrados {
     if (_selectedTab == 'Ativos') {
-      return _mockHistorico.where((b) => b['ativo'] == true).toList();
+      return _historicoReal.where((b) => b['ativo'] == true).toList();
     } else if (_selectedTab == 'Expirados') {
-      return _mockHistorico.where((b) => b['ativo'] == false).toList();
+      return _historicoReal.where((b) => b['ativo'] == false).toList();
     }
-    return _mockHistorico;
+    return _historicoReal;
   }
 
   // ── Estatísticas Superiores ───────────────────────────────────────────────
-  int get _total => _mockHistorico.length;
-  int get _ativos => _mockHistorico.where((b) => b['ativo'] == true).length;
-  int get _expirados => _mockHistorico.where((b) => b['ativo'] == false).length;
+  int get _total => _historicoReal.length;
+  int get _ativos => _historicoReal.where((b) => b['ativo'] == true).length;
+  int get _expirados => _historicoReal.where((b) => b['ativo'] == false).length;
 
   // ── Construção dos Cards de Estatísticas ──────────────────────────────────
   Widget _buildStatCard({
@@ -268,7 +258,15 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
                   ),
                 ),
                 padding: const EdgeInsets.all(2.0),
-                child: _buildPlaceholder(titulo, avatarColor, especial),
+                clipBehavior: Clip.antiAlias,
+                child: (badge['imagem'] != null && badge['imagem'].toString().trim().isNotEmpty)
+                    ? Image.network(
+                        badge['imagem'].toString().trim(),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context2, error, stackTrace) =>
+                            _buildPlaceholder(titulo, avatarColor, especial),
+                      )
+                    : _buildPlaceholder(titulo, avatarColor, especial),
               ),
             ),
           ],
@@ -546,9 +544,15 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
           TopBarActions(showDocumentIcon: false),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppTamanhos.margemEcra),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: AppCores.azulFundo,
+              ),
+            )
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(AppTamanhos.margemEcra),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

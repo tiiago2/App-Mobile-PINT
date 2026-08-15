@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:go_router/go_router.dart';
 import 'package:uicons/uicons.dart';
 import '../variaveis/variaveis.dart';
@@ -9,6 +10,11 @@ import '../database/sync_manager.dart';
 import '../database/sync_helpers.dart';
 import '../widgets/top_bar_actions.dart';
 import '../widgets/searchbar_filter.dart';
+import '../controllers/perfil_controller.dart';
+import '../database/daos/assinaturas_dao.dart';
+import '../database/daos/badges_assinatura_dao.dart';
+import 'package:file_picker/file_picker.dart';
+import '../database/remote/api_client.dart';
 
 class EditarPerfilScreen extends StatefulWidget {
   const EditarPerfilScreen({super.key});
@@ -28,17 +34,12 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     'fotoUrl': 'https://i.pravatar.cc/300?img=11',
   };
 
-  List<String> _badgeIdsDisposicao = ['b1', 'b2', 'b3', 'b4'];
-  final List<Map<String, dynamic>> _todosBadges = const [
-    {'id': 'b1', 'nome': 'Low Code', 'imagem': 'https://i.pravatar.cc/300?img=12'},
-    {'id': 'b2', 'nome': 'Outsystems', 'imagem': 'https://i.pravatar.cc/300?img=13'},
-    {'id': 'b3', 'nome': 'Flutter', 'imagem': 'https://i.pravatar.cc/300?img=14'},
-    {'id': 'b4', 'nome': 'AWS', 'imagem': 'https://i.pravatar.cc/300?img=15'},
-    {'id': 'b5', 'nome': 'Scrum', 'imagem': 'https://i.pravatar.cc/300?img=16'},
-    {'id': 'b6', 'nome': 'Java', 'imagem': 'https://i.pravatar.cc/300?img=17'},
-  ];
+  List<int> _badgeIdsDisposicao = [];
+  List<Map<String, dynamic>> _todosBadges = [];
+  String? _fotoUrl;
+  bool _isLoadingImage = false;
 
-  void _adicionarBadge(String id) {
+  void _adicionarBadge(int id) {
     if (_badgeIdsDisposicao.length < 4 && !_badgeIdsDisposicao.contains(id)) {
       setState(() {
         _badgeIdsDisposicao.add(id);
@@ -46,10 +47,76 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     }
   }
 
-  void _removerBadge(String id) {
+  void _removerBadge(int id) {
     setState(() {
       _badgeIdsDisposicao.remove(id);
     });
+  }
+
+  ImageProvider? _obterImageProvider(String? pathOrUrl) {
+    if (pathOrUrl == null || pathOrUrl.isEmpty) return null;
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+      return NetworkImage(pathOrUrl);
+    } else {
+      return FileImage(File(pathOrUrl));
+    }
+  }
+
+  Future<void> _escolherImagem() async {
+    print('📍 [TRACK 1] A iniciar seleção de imagem...');
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+      );
+
+      if (result == null || result.files.single.path == null) {
+        debugPrint('⚠️ [Foto Perfil] Seleção de imagem cancelada.');
+        print('📍 [TRACK 2.1] Seleção cancelada pelo utilizador.');
+        return;
+      }
+
+      final filePath = result.files.single.path!;
+      debugPrint('📁 [Foto Perfil] Imagem selecionada: $filePath');
+      print('📍 [TRACK 2.2] Imagem selecionada com sucesso no caminho: $filePath');
+
+      setState(() {
+        _isLoadingImage = true;
+      });
+
+      final user = AuthController.instance.currentUser;
+      final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
+      print('📍 [TRACK 3] A obter userId da sessão: $userId. A guardar localmente...');
+
+      if (userId != null && userId > 0) {
+        final localPath = await PerfilController.instance.atualizarFotoPerfilLocal(userId, filePath);
+        print('📍 [TRACK 4] Caminho local guardado no SQLite: $localPath');
+
+        setState(() {
+          _fotoUrl = localPath;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Foto de perfil guardada localmente! Será sincronizada em segundo plano.')),
+          );
+        }
+      } else {
+        print('📍 [TRACK 3.1] userId inválido ou nulo. Upload abortado.');
+      }
+    } catch (e) {
+      print('💥 [TRACK ERROR] Exceção apanhada ao escolher imagem: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao escolher imagem: $e')),
+        );
+      }
+    } finally {
+      print('📍 [TRACK 5] A entrar no FINALLY - Desativar isLoadingImage');
+      if (mounted) {
+        setState(() {
+          _isLoadingImage = false;
+        });
+      }
+    }
   }
 
   late TextEditingController _nomeController;
@@ -61,18 +128,43 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   void initState() {
     super.initState();
     final user = AuthController.instance.currentUser;
-    final nome = user?['nome']?.toString() ?? user?['nome_user']?.toString() ?? mockPerfil['nome'];
-    
-    final areaMap = user?['area'];
-    final area = areaMap is Map ? areaMap['nome']?.toString() : (user?['area']?.toString() ?? mockPerfil['area']);
-    
-    final email = user?['email']?.toString() ?? mockPerfil['email'];
-    final telefone = user?['telefone']?.toString() ?? mockPerfil['telefone'];
+    final profile = PerfilController.instance.perfilData;
+
+    final nome = profile?['nome_user']?.toString() ?? user?['nome']?.toString() ?? user?['nome_user']?.toString() ?? '';
+    final email = profile?['email']?.toString() ?? user?['email']?.toString() ?? '';
+    final telefone = profile?['telefone']?.toString() ?? user?['telefone']?.toString() ?? '';
+    final area = profile?['nome_area']?.toString() ?? '';
 
     _nomeController = TextEditingController(text: nome);
     _areaController = TextEditingController(text: area);
     _emailController = TextEditingController(text: email);
     _telefoneController = TextEditingController(text: telefone);
+
+    _fotoUrl = profile?['imagem_perfil']?.toString() ??
+        user?['foto']?.toString() ??
+        user?['imagem_perfil']?.toString() ??
+        mockPerfil['fotoUrl'];
+
+    if (profile == null) {
+      // Carregar dados de perfil de forma assíncrona se não estiverem na cache do controller
+      PerfilController.instance.carregarDadosPerfil().then((_) {
+        if (mounted) {
+          setState(() {
+            final p = PerfilController.instance.perfilData;
+            _nomeController.text = p?['nome_user']?.toString() ?? _nomeController.text;
+            _emailController.text = p?['email']?.toString() ?? _emailController.text;
+            _telefoneController.text = p?['telefone']?.toString() ?? _telefoneController.text;
+            _areaController.text = p?['nome_area']?.toString() ?? _areaController.text;
+            _fotoUrl = p?['imagem_perfil']?.toString() ?? _fotoUrl;
+            _badgeIdsDisposicao = List<int>.from(PerfilController.instance.signatureBadgeIds);
+            _todosBadges = List<Map<String, dynamic>>.from(PerfilController.instance.conqueredBadges);
+          });
+        }
+      });
+    } else {
+      _badgeIdsDisposicao = List<int>.from(PerfilController.instance.signatureBadgeIds);
+      _todosBadges = List<Map<String, dynamic>>.from(PerfilController.instance.conqueredBadges);
+    }
   }
 
   @override
@@ -84,7 +176,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     super.dispose();
   }
 
-  void _guardar() {
+  Future<void> _guardar() async {
     if (_formKey.currentState!.validate()) {
       final user = AuthController.instance.currentUser;
       final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
@@ -96,33 +188,38 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
           areaId = userArea['id_area']?.toString();
         }
         
-        final perfilAtualizado = {
-          'nome': _nomeController.text.trim(),
-          'email': _emailController.text.trim(),
-          'telefone': _telefoneController.text.trim(),
-          'foto': user?['foto'] ?? user?['imagem_perfil'],
-          'id_area': user?['id_area']?.toString() ?? areaId,
-        };
-        
-        PerfilDao.instance.guardarPerfilLocal(
-          userId: userId,
-          perfil: perfilAtualizado,
-        ).then((_) {
+        try {
+          // Chamada unificada Offline-First no PerfilController (Dados Pessoais + Foto + Assinatura)
+          await PerfilController.instance.guardarAlteracoesPerfilOffline(
+            userId: userId,
+            nome: _nomeController.text.trim(),
+            email: _emailController.text.trim(),
+            telefone: _telefoneController.text.trim(),
+            idArea: user?['id_area']?.toString() ?? areaId,
+            fotoLocalPath: _fotoUrl,
+            assinaturaSourcePath: null, // Caso queira passar caminho físico de assinatura, se implementado futuramente
+            badgeIdsDisposicao: _badgeIdsDisposicao,
+          );
+
+          // Agendar/Disparar Push Sync imediato em background
           SyncManager.instance.executePushSync(userId).catchError((e) {
             debugPrint('⚠️ [SyncManager] Erro no push sync automático ao editar perfil: $e');
             return false;
           });
-        }).catchError((e) {
-          debugPrint('❌ [EditarPerfil] Erro ao guardar perfil localmente: $e');
-        });
+
+        } catch (e) {
+          debugPrint('❌ [EditarPerfil] Erro ao guardar dados locais: $e');
+        }
       }
 
-      final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil atualizado com sucesso!')),
-      );
-      if (context.canPop()) {
-        context.pop();
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil updated successfully!')),
+        );
+        if (context.canPop()) {
+          context.pop();
+        }
       }
     }
   }
@@ -175,42 +272,55 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: AppCores.outline.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(35.0),
-                          image: mockPerfil['fotoUrl'] != null
-                              ? DecorationImage(
-                                  image: NetworkImage(mockPerfil['fotoUrl']),
-                                  fit: BoxFit.cover,
+                  child: GestureDetector(
+                    onTap: _isLoadingImage ? null : _escolherImagem,
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppCores.outline.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(35.0),
+                            image: _fotoUrl != null && !_isLoadingImage
+                                ? DecorationImage(
+                                    image: _obterImageProvider(_fotoUrl)!,
+                                    fit: BoxFit.cover,
+                                    onError: (exception, stackTrace) {
+                                      debugPrint('⚠️ Erro ao carregar imagem de perfil: $exception');
+                                    },
+                                  )
+                                : null,
+                          ),
+                          child: _isLoadingImage
+                              ? const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppCores.azulFundo,
+                                  ),
                                 )
-                              : null,
+                              : (_fotoUrl == null
+                                  ? const Icon(Icons.person, size: 40, color: AppCores.fontes)
+                                  : null),
                         ),
-                        child: mockPerfil['fotoUrl'] == null
-                            ? const Icon(Icons.person, size: 40, color: AppCores.fontes)
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8.0),
-                          decoration: const BoxDecoration(
-                            color: AppCores.azulFundo,
-                            shape: BoxShape.circle,
+                        if (!_isLoadingImage)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8.0),
+                              decoration: const BoxDecoration(
+                                color: AppCores.azulFundo,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: AppCores.branco,
+                                size: 20,
+                              ),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: AppCores.branco,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 SizedBox(height: AppTamanhos.gapPerfil),
@@ -269,10 +379,10 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
 }
 
 class GerirBadgesSeccao extends StatefulWidget {
-  final List<String> badgeIdsDisposicao;
+  final List<int> badgeIdsDisposicao;
   final List<Map<String, dynamic>> todosBadges;
-  final Function(String) onAddBadge;
-  final Function(String) onRemoveBadge;
+  final Function(int) onAddBadge;
+  final Function(int) onRemoveBadge;
 
   const GerirBadgesSeccao({
     super.key,
@@ -295,14 +405,14 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
     // Filtra os badges de exposição baseando-se nos IDs
     final List<Map<String, dynamic>> badgesExibicao = widget.badgeIdsDisposicao.map((id) {
       return widget.todosBadges.firstWhere(
-        (badge) => badge['id'] == id,
+        (badge) => intOrNull(badge['id']) == id,
         orElse: () => <String, dynamic>{},
       );
     }).where((badge) => badge.isNotEmpty).toList();
 
     // Filtra os restantes (que não estão em exposição)
     var restantes = widget.todosBadges.where((badge) {
-      return !widget.badgeIdsDisposicao.contains(badge['id']);
+      return !widget.badgeIdsDisposicao.contains(intOrNull(badge['id']));
     }).toList();
 
     // Apply search filter
@@ -463,7 +573,7 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
           top: 0,
           right: 0,
           child: GestureDetector(
-            onTap: () => widget.onRemoveBadge(badge['id']),
+            onTap: () => widget.onRemoveBadge(intOrNull(badge['id']) ?? 0),
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: const BoxDecoration(
@@ -511,7 +621,7 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
                   top: 0,
                   right: 0,
                   child: GestureDetector(
-                    onTap: () => widget.onAddBadge(badge['id']),
+                    onTap: () => widget.onAddBadge(intOrNull(badge['id']) ?? 0),
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(

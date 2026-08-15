@@ -46,6 +46,7 @@ class DocumentosSubmissaoDao {
     final normalized = {
       'id_ficheiro': intOrNull(cleanRow['id_ficheiro'] ?? cleanRow['remote_id']),
       'id_submissao_local': subLocalId ?? -1,
+      'id_submissao': intOrNull(cleanRow['id_submissao'] ?? cleanRow['remote_submissao_id']),
       'id_requisito': reqId ?? -1,
       'ficheiro': cleanRow['ficheiro'] ?? cleanRow['nome_ficheiro'] ?? cleanRow['url_remota'],
       'ficheiro_local': cleanRow['ficheiro_local'] ?? cleanRow['caminho_local'],
@@ -145,6 +146,8 @@ class DocumentosSubmissaoDao {
         'id_ficheiro': intOrNull(cleanRow['id_ficheiro'] ?? cleanRow['remote_id']),
       if (cleanRow.containsKey('id_submissao_local') || cleanRow.containsKey('submissao_local_id'))
         'id_submissao_local': intOrNull(cleanRow['id_submissao_local'] ?? cleanRow['submissao_local_id']),
+      if (cleanRow.containsKey('id_submissao') || cleanRow.containsKey('remote_submissao_id'))
+        'id_submissao': intOrNull(cleanRow['id_submissao'] ?? cleanRow['remote_submissao_id']),
       if (cleanRow.containsKey('id_requisito') || cleanRow.containsKey('requisito_id'))
         'id_requisito': intOrNull(cleanRow['id_requisito'] ?? cleanRow['requisito_id']),
       if (cleanRow.containsKey('ficheiro') || cleanRow.containsKey('nome_ficheiro'))
@@ -283,13 +286,15 @@ class DocumentosSubmissaoDao {
         final values = {
           'id_ficheiro': idFicheiro,
           'id_submissao_local': idSubmissaoLocal,
+          'id_submissao': remoteSubmissaoId,
           'id_requisito': idRequisito,
-          'ficheiro': raw['ficheiro'] ?? raw['url_remota'] ?? raw['nome_ficheiro'],
-          'ficheiro_local': raw['ficheiro_local'] ?? raw['caminho_local'],
-          'tamanho_bytes': intOrNull(raw['tamanho_bytes']),
-          'hash_ficheiro': raw['hash_ficheiro'],
-          'upload_status': raw['upload_status'] ?? 'completed',
-          'upload_error': raw['upload_error'],
+          'ficheiro': raw['ficheiro']?.toString() ?? raw['url_remota']?.toString() ?? raw['nome_ficheiro']?.toString(),
+          'ficheiro_local': raw['ficheiro_local']?.toString() ?? raw['caminho_local']?.toString(),
+          'url_ficheiro': raw['url_ficheiro']?.toString() ?? raw['ficheiro']?.toString() ?? raw['url_remota']?.toString(),
+          'tamanho_bytes': intOrNull(raw['tamanho_bytes'] ?? raw['file_size']),
+          'hash_ficheiro': raw['hash_ficheiro']?.toString() ?? raw['file_hash']?.toString(),
+          'upload_status': raw['upload_status']?.toString() ?? 'completed',
+          'upload_error': raw['upload_error']?.toString(),
           'updated_file': raw['updated_file']?.toString() ?? raw['server_updated_at']?.toString() ?? raw['updated_at']?.toString(),
           'created_local_at': raw['created_local_at']?.toString() ?? raw['created_at']?.toString() ?? utcNow(),
           'synced_at': raw['synced_at']?.toString() ?? utcNow(),

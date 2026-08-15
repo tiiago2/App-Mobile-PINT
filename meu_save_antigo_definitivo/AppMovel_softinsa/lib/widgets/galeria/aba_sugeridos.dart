@@ -27,7 +27,7 @@ class AbaSugeridos extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: sugeridos.length,
-          separatorBuilder: (_, __) =>
+          separatorBuilder: (context2, index2) =>
               const SizedBox(height: AppTamanhos.gapCandidaturas),
           itemBuilder: (context, index) {
             final badge = sugeridos[index];
@@ -41,6 +41,7 @@ class AbaSugeridos extends StatelessWidget {
               progressoPercent: badge['progresso'] as int? ?? 0,
               especial: badge['especial'] as bool? ?? false,
               justificacao: badge['justificacao'] as String?,
+              badgeDataOverride: badge,
             );
           },
         ),

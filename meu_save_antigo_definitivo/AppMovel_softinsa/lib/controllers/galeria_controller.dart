@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../database/daos/badges_dao.dart';
 import '../database/daos/perfil_dao.dart';
 import '../database/sync_helpers.dart';
+import '../database/sync_manager.dart';
 import 'auth_controller.dart';
 
 class GaleriaController extends ChangeNotifier {
@@ -34,17 +35,24 @@ class GaleriaController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Obter id_area do perfil
+      // 1. Executa o Pull Sync para trazer atualizações do servidor antes de ler localmente
+      try {
+        await SyncManager.instance.executePullSync(userId);
+      } catch (syncError) {
+        print('⚠️ [GaleriaController] Erro na sincronização antes da leitura: $syncError');
+      }
+
+      // 2. Obter id_area do perfil
       final perfil = await PerfilDao.instance.lerPerfilComArea(userId);
       final userAreaId = intOrNull(perfil?['id_area']) ?? 0;
 
-      // 2. Carregar todos os badges com estados calculados
+      // 3. Carregar todos os badges com estados calculados do SQLite
       _todosBadges = await BadgesDao.instance.obterTodosBadgesParaGaleria(
         userId: userId,
         userAreaId: userAreaId,
       );
 
-      // 3. Carregar badges sugeridos pelo motor local
+      // 4. Carregar badges sugeridos pelo motor local do SQLite
       _sugeridosBadges = await BadgesDao.instance.obterBadgesSugeridos(
         userId: userId,
         userAreaId: userAreaId,

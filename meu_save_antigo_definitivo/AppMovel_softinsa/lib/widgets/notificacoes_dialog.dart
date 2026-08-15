@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uicons/uicons.dart';
 import '../variaveis/variaveis.dart';
+import '../database/daos/notificacao.dart';
 
 class NotificacoesDialog extends StatefulWidget {
   const NotificacoesDialog({super.key});
@@ -11,62 +13,130 @@ class NotificacoesDialog extends StatefulWidget {
 
 class _NotificacoesDialogState extends State<NotificacoesDialog> {
   int _selectedTab = 0; // 0: Notificações, 1: Avisos
+  List<Map<String, dynamic>> _notificacoesReais = [];
+  List<Map<String, dynamic>> _avisosReais = [];
+  bool _isLoading = true;
 
-  // Mock de notificações normais
-  final List<Map<String, dynamic>> _mockNotificacoes = [
-    {
-      'descricao': 'Administrador atualizou o badge Low Code(júnior)',
-      'tempo': 'há 2 horas',
-      'isNova': true,
-      'tipo': 'badge',
-    },
-    {
-      'descricao': 'A sua candidatura em Low Code(júnior) foi aceite',
-      'tempo': 'há 7 horas',
-      'isNova': false,
-      'tipo': 'aceite',
-    },
-    {
-      'descricao': 'A sua candidatura em Low Code(Sénior) foi recusada',
-      'tempo': 'há 1 dia',
-      'isNova': false,
-      'tipo': 'rejeitada',
-    },
-    {
-      'descricao': 'A sua candidatura em Low Code(Intermédio) foi aceite',
-      'tempo': 'há 1 mês',
-      'isNova': false,
-      'tipo': 'aceite',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _carregarDados();
+  }
 
-  // Mock de avisos
-  final List<Map<String, dynamic>> _mockAvisos = [
-    {
-      'descricao': 'Manutenção programada do sistema no dia 28/07 das 02:00 às 04:00.',
-      'tempo': 'há 1 dia',
-      'isNova': true,
-      'tipoDestino': 'Grupo',
-      'destino': 'Todos os Consultores',
-      'autor': 'Administrador',
-    },
-    {
-      'descricao': 'Por favor, atualize o seu perfil e adicione os novos certificados obtidos.',
-      'tempo': 'há 3 dias',
-      'isNova': false,
-      'tipoDestino': 'Individual',
-      'destino': 'Tiago',
-      'autor': 'Recursos Humanos',
-    },
-    {
-      'descricao': 'Nova Service Line "Cloud & DevOps" disponível para candidaturas.',
-      'tempo': 'há 5 dias',
-      'isNova': false,
-      'tipoDestino': 'Área',
-      'destino': 'Cloud',
-      'autor': 'Direção',
-    },
-  ];
+  String _formatarTempo(String? dataEnvioStr, String locale) {
+    if (dataEnvioStr == null || dataEnvioStr.isEmpty) return '';
+    try {
+      final DateTime date = DateTime.parse(dataEnvioStr).toLocal();
+      final DateTime now = DateTime.now();
+      final Duration diff = now.difference(date);
+
+      if (diff.inMinutes < 1) {
+        return locale == 'en' ? 'just now' : locale == 'es' ? 'ahora mesmo' : 'agora mesmo';
+      } else if (diff.inMinutes < 60) {
+        final m = diff.inMinutes;
+        return locale == 'en' ? '$m m ago' : locale == 'es' ? 'hace $m m' : 'há $m min';
+      } else if (diff.inHours < 24) {
+        final h = diff.inHours;
+        return locale == 'en' ? '$h h ago' : locale == 'es' ? 'hace $h h' : 'há $h horas';
+      } else if (diff.inDays < 30) {
+        final d = diff.inDays;
+        return locale == 'en' ? '$d d ago' : locale == 'es' ? 'hace $d d' : 'há $d dias';
+      } else {
+        return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+      }
+    } catch (_) {}
+    return dataEnvioStr.length > 10 ? dataEnvioStr.substring(0, 10) : dataEnvioStr;
+  }
+
+  Future<void> _carregarDados() async {
+    try {
+      final rows = await NotificacoesDao.instance.getNotificacoes();
+
+      final List<Map<String, dynamic>> notificacoes = [];
+      final List<Map<String, dynamic>> avisos = [];
+
+      for (final row in rows) {
+        final tipoNotif = row['tipo_notificacao']?.toString() ?? '';
+        final desc = row['descricao_notificacao']?.toString() ?? '';
+        final isNova = (row['lida'] ?? 0) == 0;
+        final dataEnvio = row['data_envio']?.toString();
+        final idNotif = row['id_notificacao'] as int? ?? 0;
+
+        if (tipoNotif.toLowerCase().startsWith('aviso:')) {
+          String tipoDestino = 'Geral';
+          String destino = 'Todos';
+          final parts = tipoNotif.split(':');
+          if (parts.length >= 3) {
+            final tDest = parts[1].toLowerCase();
+            if (tDest == 'grupo') {
+              tipoDestino = 'Grupo';
+            } else if (tDest == 'individual') {
+              tipoDestino = 'Individual';
+            } else if (tDest == 'area') {
+              tipoDestino = 'Área';
+            }
+            destino = parts[2];
+          }
+
+          String autor = 'Administrador';
+          try {
+            final jsonStr = row['notificacao_json'] as String?;
+            if (jsonStr != null && jsonStr.isNotEmpty) {
+              final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+              autor = decoded['autor'] ?? decoded['enviado_por'] ?? 'Administrador';
+            }
+          } catch (_) {}
+
+          avisos.add({
+            'id_notificacao': idNotif,
+            'descricao': desc,
+            'data_envio': dataEnvio,
+            'isNova': isNova,
+            'tipoDestino': tipoDestino,
+            'destino': destino,
+            'autor': autor,
+            'raw': row,
+          });
+        } else {
+          String tipoIcone = 'badge';
+          if (tipoNotif == 'AVALIACAO_STATUS') {
+            if (desc.toLowerCase().contains('aceite') || desc.toLowerCase().contains('aprovado')) {
+              tipoIcone = 'aceite';
+            } else {
+              tipoIcone = 'rejeitada';
+            }
+          } else if (tipoNotif == 'BADGE_EXPIRADO') {
+            tipoIcone = 'rejeitada';
+          } else if (tipoNotif == 'AVISO_OBJETIVO') {
+            tipoIcone = 'aviso_objetivo';
+          }
+
+          notificacoes.add({
+            'id_notificacao': idNotif,
+            'descricao': desc,
+            'data_envio': dataEnvio,
+            'isNova': isNova,
+            'tipo': tipoIcone,
+            'raw': row,
+          });
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _notificacoesReais = notificacoes;
+          _avisosReais = avisos;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   Widget _obterIconeETempo(String tipo) {
     IconData iconData = UIcons.boldRounded.badge;
@@ -91,7 +161,8 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
   }
 
   void _mostrarDetalheAviso(BuildContext context, Map<String, dynamic> raw) {
-    final dataStr = raw['tempo'];
+    final locale = Localizations.localeOf(context).languageCode;
+    final dataStr = _formatarTempo(raw['data_envio'] ?? raw['tempo'], locale);
     final autor = raw['autor'] ?? 'Administrador';
     final mensagem = raw['descricao'] ?? '';
 
@@ -200,7 +271,26 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
       semAvisos = "No hay avisos.";
     }
 
-    final listExibida = _selectedTab == 0 ? _mockNotificacoes : _mockAvisos;
+    if (_isLoading) {
+      return Material(
+        type: MaterialType.transparency,
+        child: Container(
+          width: 320,
+          height: 200,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppCores.branco,
+            borderRadius: BorderRadius.circular(14.0),
+            border: Border.all(color: AppCores.outline, width: 1.6),
+          ),
+          child: const CircularProgressIndicator(
+            color: AppCores.azulFundo,
+          ),
+        ),
+      );
+    }
+
+    final listExibida = _selectedTab == 0 ? _notificacoesReais : _avisosReais;
 
     return Material(
       type: MaterialType.transparency,
@@ -315,15 +405,20 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
                         child: Column(
                           children: listExibida.map((raw) {
                             final descricao = raw['descricao'] ?? '';
-                            final tempoStr = raw['tempo'] ?? '';
+                            final tempoStr = _formatarTempo(raw['data_envio'], locale);
                             final isNova = raw['isNova'] ?? false;
 
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8.0),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(10.0),
-                                onTap: () {
-                                  if (_selectedTab == 1) {
+                                onTap: () async {
+                                  final idNotif = raw['id_notificacao'] as int?;
+                                  if (idNotif != null && isNova) {
+                                    await NotificacoesDao.instance.marcarComoLida(idNotif);
+                                    _carregarDados();
+                                  }
+                                  if (context.mounted && _selectedTab == 1) {
                                     _mostrarDetalheAviso(context, raw);
                                   }
                                 },

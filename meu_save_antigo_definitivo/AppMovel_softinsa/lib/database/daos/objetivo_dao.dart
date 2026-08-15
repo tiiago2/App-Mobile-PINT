@@ -158,10 +158,29 @@ class ObjetivosDao {
             whereArgs: [existing.first['id_objetivo_local']],
           );
         } else {
-          await txn.insert(
+          // Check if there's a local pending insertion (id_objetivo is NULL) for the same user/badge
+          final pendingLocal = await txn.query(
             DatabaseSchema.objetivosTable,
-            cleanRow,
+            columns: ['id_objetivo_local'],
+            where: 'id_utilizador = ? AND id_badge = ? AND id_objetivo IS NULL',
+            whereArgs: [idUtilizador, idBadge],
+            limit: 1,
           );
+
+          if (pendingLocal.isNotEmpty) {
+            await txn.update(
+              DatabaseSchema.objetivosTable,
+              cleanRow,
+              where: 'id_objetivo_local = ?',
+              whereArgs: [pendingLocal.first['id_objetivo_local']],
+            );
+            print('🔗 [ObjetivosDao] Vinculado registo local pendente ${pendingLocal.first['id_objetivo_local']} ao id_objetivo servidor $idObjetivo');
+          } else {
+            await txn.insert(
+              DatabaseSchema.objetivosTable,
+              cleanRow,
+            );
+          }
         }
       }
     });
@@ -236,15 +255,14 @@ class ObjetivosDao {
     int? progresso,
     bool? concluido,
   }) async {
-    if (userId <= 0 ||
-        (dataFinal != null && DateTime.tryParse(dataFinal) == null)) {
+    if (userId <= 0 || localId <= 0) {
       throw Exception('invalid_objective');
     }
     final db = await DatabaseHelper.instance.database;
     await db.transaction((txn) async {
       final rows = await txn.query(
         DatabaseSchema.objetivosTable,
-        where: 'local_id = ? AND utilizador_id = ? AND deleted_at IS NULL',
+        where: 'id_objetivo_local = ? AND id_utilizador = ? AND (deleted_objetivo IS NULL OR deleted_objetivo = 0)',
         whereArgs: [localId, userId],
         limit: 1,
       );
@@ -253,30 +271,46 @@ class ObjetivosDao {
       final syncStatus = row['sync_status'] == 'pending_insert'
           ? 'pending_insert'
           : 'pending_update';
+
+      Map<String, dynamic> badgeJsonMap = {};
+      try {
+        badgeJsonMap = Map<String, dynamic>.from(jsonDecode(row['badge_json']?.toString() ?? '{}'));
+      } catch (_) {}
+
+      if (titulo != null) badgeJsonMap['nome_badge'] = titulo;
+      if (descricao != null) badgeJsonMap['descricao_badge'] = descricao;
+      if (dataFinal != null) badgeJsonMap['data_final'] = dataFinal;
+
       final values = <String, Object?>{
+        'badge_json': jsonEncode(badgeJsonMap),
+        if (dataFinal != null) 'data_final': dataFinal,
         if (concluido == true) 'data_conclusao': utcNow(),
         'local_updated_at': utcNow(),
         'sync_status': syncStatus,
       };
-      if (titulo != null) values['titulo'] = titulo;
-      if (descricao != null) values['descricao'] = descricao;
-      if (dataFinal != null) values['data_final'] = dataFinal;
-      if (progresso != null) values['progresso'] = progresso.clamp(0, 100);
-      if (concluido != null) values['concluido'] = concluido ? 1 : 0;
+
       await txn.update(
         DatabaseSchema.objetivosTable,
         values,
-        where: 'local_id = ? AND utilizador_id = ?',
+        where: 'id_objetivo_local = ? AND id_utilizador = ?',
         whereArgs: [localId, userId],
       );
+
+      String? clientId = badgeJsonMap['client_id']?.toString();
+      clientId ??= "client_obj_${DateTime.now().millisecondsSinceEpoch}";
+
       await SyncOutboxDao.instance.adicionarOperacaoNoExecutor(
         txn,
         userId: userId,
         entity: 'objetivos',
         operation: 'update',
         localRecordId: localId,
-        clientId: row['client_id'] as String,
-        payload: {...row, ...values},
+        clientId: clientId,
+        payload: {
+          'client_id': clientId,
+          'id_badge': row['id_badge'],
+          'data_final': dataFinal ?? row['data_final'],
+        },
       );
     });
     _changes.add(userId);
@@ -290,13 +324,14 @@ class ObjetivosDao {
     await db.transaction((txn) async {
       final rows = await txn.query(
         DatabaseSchema.objetivosTable,
-        where: 'local_id = ? AND utilizador_id = ?',
+        where: 'id_objetivo_local = ? AND id_utilizador = ?',
         whereArgs: [localId, userId],
         limit: 1,
       );
       if (rows.isEmpty) throw Exception('objective_not_found');
-      if (rows.first['sync_status'] == 'pending_insert' &&
-          rows.first['remote_id'] == null) {
+      
+      final remoteIdVal = intOrNull(rows.first['id_objetivo']);
+      if (rows.first['sync_status'] == 'pending_insert' && remoteIdVal == null) {
         await txn.delete(
           DatabaseSchema.syncOutboxTable,
           where: 'user_id = ? AND entity = ? AND local_record_id = ?',
@@ -304,31 +339,40 @@ class ObjetivosDao {
         );
         await txn.delete(
           DatabaseSchema.objetivosTable,
-          where: 'local_id = ? AND utilizador_id = ?',
+          where: 'id_objetivo_local = ? AND id_utilizador = ?',
           whereArgs: [localId, userId],
         );
         return;
       }
+      
       await txn.update(
         DatabaseSchema.objetivosTable,
         {
-          'deleted_at': utcNow(),
+          'deleted_objetivo': 1,
           'local_updated_at': utcNow(),
           'sync_status': 'pending_delete',
         },
-        where: 'local_id = ?',
+        where: 'id_objetivo_local = ?',
         whereArgs: [localId],
       );
+
+      String? clientId;
+      try {
+        final json = jsonDecode(rows.first['badge_json']?.toString() ?? '{}');
+        clientId = json['client_id']?.toString();
+      } catch (_) {}
+      clientId ??= "client_obj_del_${DateTime.now().millisecondsSinceEpoch}";
+
       await SyncOutboxDao.instance.adicionarOperacaoNoExecutor(
         txn,
         userId: userId,
         entity: 'objetivos',
         operation: 'delete',
         localRecordId: localId,
-        clientId: rows.first['client_id'] as String,
+        clientId: clientId,
         payload: {
-          'client_id': rows.first['client_id'],
-          'remote_id': rows.first['remote_id'],
+          'client_id': clientId,
+          'id_objetivo': remoteIdVal,
         },
       );
     });
@@ -492,7 +536,7 @@ class ObjetivosDao {
     ''', [userId]);
   }
 
-  /// Query B: Obter os Badges Disponíveis para criação de objetivos (exclui conquistados e objetivos ativos)
+  /// Query B: Obter os Badges Disponíveis para criação de objetivos (exclui conquistados não expirados e objetivos ativos não expirados)
   Future<List<Map<String, dynamic>>> obterBadgesDisponiveis(int userId) async {
     final db = await DatabaseHelper.instance.database;
     return db.rawQuery('''
@@ -503,7 +547,9 @@ class ObjetivosDao {
         AND b.id_badge NOT IN (
           SELECT rb.id_badge 
           FROM ${DatabaseSchema.registoBadgesTable} rb 
-          WHERE rb.id_utilizador = ? AND (rb.deleted_registo IS NOT 1)
+          WHERE rb.id_utilizador = ? 
+            AND (rb.deleted_registo IS NOT 1)
+            AND (rb.expirado = 0 OR rb.expirado IS NULL)
         )
         AND b.id_badge NOT IN (
           SELECT o.id_badge 
@@ -511,6 +557,7 @@ class ObjetivosDao {
           WHERE o.id_utilizador = ? 
             AND o.data_conclusao IS NULL 
             AND (o.deleted_objetivo IS NOT 1)
+            AND (o.data_final IS NULL OR date(o.data_final) >= date('now'))
         )
       ORDER BY b.nome_badge ASC
     ''', [userId, userId]);

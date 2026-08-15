@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 import '../database/daos/objetivo_dao.dart';
+import '../database/database_helper.dart';
 import 'auth_controller.dart';
 import '../database/sync_helpers.dart';
 import '../database/sync_manager.dart';
@@ -51,6 +53,7 @@ class ObjetivosController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final db = await DatabaseHelper.instance.database;
       // 1. Obter objetivos
       final todos = await ObjetivosDao.instance.obterObjetivosComBadges(userId);
       final now = DateTime.now();
@@ -65,15 +68,68 @@ class ObjetivosController extends ChangeNotifier {
         final daysLeft = dataFinal != null ? dataFinal.difference(now).inDays + 1 : 0;
         final diasRestantes = daysLeft < 0 ? 0 : daysLeft;
 
+        final badgeId = obj['id_badge'];
+        double progress = 0.0;
+        final dataConclusaoStr = obj['data_conclusao']?.toString() ?? '';
+        final concluido = dataConclusaoStr.isNotEmpty;
+
+        if (concluido) {
+          progress = 1.0;
+        } else if (badgeId != null) {
+          // Buscar se há submissão para este badge
+          final subRes = await db.rawQuery('''
+            SELECT id_submissao, id_submissao_local, status
+            FROM submissoes
+            WHERE id_utilizador = ? AND id_badge = ?
+              AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = 'false' OR deleted_submissao = '0')
+            LIMIT 1
+          ''', [userId, badgeId]);
+
+          if (subRes.isNotEmpty) {
+            final sub = subRes.first;
+            final String statusStr = sub['status']?.toString().toLowerCase() ?? '';
+            
+            if (statusStr == 'aceite' || statusStr == 'aceite talent' || statusStr == 'aprovado' || statusStr == 'aprovada') {
+              progress = 1.0;
+            } else {
+              final subId = sub['id_submissao'];
+              final subLocalId = sub['id_submissao_local'];
+
+              final reqsCountRes = await db.rawQuery('''
+                SELECT COUNT(*) as cnt FROM badges_requisitos WHERE id_badge = ?
+              ''', [badgeId]);
+              final totalReqs = Sqflite.firstIntValue(reqsCountRes) ?? 0;
+
+              final compReqsRes = await db.rawQuery('''
+                SELECT COUNT(DISTINCT id_requisito) as cnt
+                FROM documentos_submissao
+                WHERE (
+                  (id_submissao IS NOT NULL AND id_submissao = ?) 
+                  OR 
+                  (id_submissao_local IS NOT NULL AND id_submissao_local = ?)
+                )
+                AND (deleted_file = 0 OR deleted_file IS NULL OR deleted_file = '')
+              ''', [subId, subLocalId]);
+              final compReqs = Sqflite.firstIntValue(compReqsRes) ?? 0;
+
+              if (totalReqs > 0) {
+                progress = compReqs / totalReqs;
+              }
+            }
+          }
+        }
+
         final mapped = {
           'id': obj['id_objetivo_local'],
           'titulo': obj['nome_badge'] ?? '',
           'categoria': obj['categoria_badge'] ?? '',
           'deadline': dataFinalStr != null ? _formatDateDisplay(dataFinalStr) : '',
           'diasRestantes': diasRestantes,
-          'progresso': obj['data_conclusao'] != null ? 1.0 : 0.0,
-          'ativo': obj['data_conclusao'] == null && diasRestantes > 0,
+          'progresso': progress,
+          'ativo': !concluido && diasRestantes > 0,
+          'concluido': concluido,
           'imagem': obj['imagem'],
+          'id_badge': badgeId,
         };
 
         if (mapped['ativo'] == true) {

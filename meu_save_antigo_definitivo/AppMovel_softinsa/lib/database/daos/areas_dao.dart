@@ -16,7 +16,7 @@ class AreasDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.areasTable,
-      where: 'id_area = ? AND deleted_area IS NULL',
+      where: 'id_area = ? AND deleted_area IS NOT 1',
       whereArgs: [areaId],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class AreasDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.areasTable,
-      where: 'deleted_area IS NULL',
+      where: 'deleted_area IS NOT 1',
     );
   }
 
@@ -50,7 +50,7 @@ class AreasDao {
         DatabaseSchema.areasTable,
         {
           'id_area': areaId,
-          'id_service_line': intOrNull(raw['id_service_line'] ?? raw['service_line_id']),
+          'id_service_line': intOrNull(raw['id_service_line'] ?? raw['service_line_id'] ?? (raw['service_line'] is Map ? (raw['service_line'] as Map)['id_service_line'] ?? (raw['service_line'] as Map)['id'] : null)),
           'nome_area': raw['nome_area'] ?? '',
           'updated_area': raw['updated_area']?.toString() ?? raw['updated_at']?.toString() ?? raw['server_updated_at']?.toString(),
           'deleted_area': deletedArea,

@@ -27,9 +27,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
     });
   }
 
-  String _formatDateDisplay(DateTime dt) {
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-  }
+
 
   // ── Seletor Visual de Abas (Estilo Galeria) ────────────────────────────────
   Widget _buildBarraDeSelecaoObjetivos() {
@@ -179,7 +177,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
                     ],
                   ),
                 ),
-                // Dias Restantes (Pill)
+                 // Dias Restantes (Pill) ou Tag de Concluído/Expirado
                 if (ativo)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
@@ -195,44 +193,73 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+                    decoration: BoxDecoration(
+                      color: concluido
+                          ? const Color(0xFFE6F4EA) // Verde claro
+                          : const Color(0xFFFCE8E6), // Vermelho claro
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(
+                        color: concluido
+                            ? const Color(0xFF137333) // Verde escuro
+                            : const Color(0xFFC5221F), // Vermelho escuro
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Text(
+                      concluido 
+                          ? (AppLocalizations.of(context)?.completo ?? 'Concluído')
+                          : (AppLocalizations.of(context)?.expirado ?? 'Não Concluído'),
+                      style: TextStyle(
+                        color: concluido
+                            ? const Color(0xFF137333)
+                            : const Color(0xFFC5221F),
+                        fontSize: 11.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
               ],
             ),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 6.0,
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0F2F6),
-                      borderRadius: BorderRadius.circular(3.0),
-                    ),
-                    child: FractionallySizedBox(
+            if (ativo) ...[
+              const SizedBox(height: 12.0),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 6.0,
                       alignment: Alignment.centerLeft,
-                      widthFactor: progresso,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: concluido
-                              ? AppCores.sucessoLogin
-                              : (ativo ? AppCores.azulFundo : const Color(0xFFC40003)),
-                          borderRadius: BorderRadius.circular(3.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F2F6),
+                        borderRadius: BorderRadius.circular(3.0),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: progresso,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppCores.azulFundo,
+                            borderRadius: BorderRadius.circular(3.0),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12.0),
-                Text(
-                  '${(progresso * 100).toInt()}%',
-                  style: const TextStyle(
-                    color: AppCores.fontes,
-                    fontSize: 12.0,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(width: 12.0),
+                  Text(
+                    '${(progresso * 100).toInt()}%',
+                    style: const TextStyle(
+                      color: AppCores.fontes,
+                      fontSize: 12.0,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12.0),
           // Data Limite (Footer)
           Row(

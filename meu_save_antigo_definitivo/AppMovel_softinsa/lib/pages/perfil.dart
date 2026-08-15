@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:go_router/go_router.dart';
 import 'package:uicons/uicons.dart';
 import '../controllers/auth_controller.dart';
@@ -10,6 +11,15 @@ import '../widgets/top_bar_actions.dart';
 import '../idiomas/app_localizations.dart';
 import 'badge_detalhe.dart';
 import 'historico_badges.dart';
+
+ImageProvider? _obterImageProvider(String? pathOrUrl) {
+  if (pathOrUrl == null || pathOrUrl.isEmpty) return null;
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+    return NetworkImage(pathOrUrl);
+  } else {
+    return FileImage(File(pathOrUrl));
+  }
+}
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -318,7 +328,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           ),
                           SizedBox(height: AppTamanhos.gapPerfil),
                           CartaoHistoricoBadges(
-                            todosBadges: perfilController.conqueredBadges,
+                            todosBadges: perfilController.historyBadges,
                           ),
                         ],
                       ),
@@ -467,7 +477,7 @@ class CartaoPerfil extends StatelessWidget {
             borderRadius: BorderRadius.circular(35.0),
             image: fotoUrl != null
                 ? DecorationImage(
-                    image: NetworkImage(fotoUrl!),
+                    image: _obterImageProvider(fotoUrl)!,
                     fit: BoxFit.cover,
                   )
                 : null,

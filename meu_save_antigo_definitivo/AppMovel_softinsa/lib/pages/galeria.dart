@@ -38,7 +38,15 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
     }
   }
 
-
+  String _removerAcentos(String text) {
+    const comAcentos = 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ';
+    const semAcentos = 'AAAAAAACEEEEIIIIDNOOOOOOUUUUYPsBaaaaaaaceeeeiiiidnoooooouuuuyby';
+    var out = text;
+    for (var i = 0; i < comAcentos.length; i++) {
+      out = out.replaceAll(comAcentos[i], semAcentos[i]);
+    }
+    return out;
+  }
 
   List<Map<String, dynamic>> _filtrarBadges(List<Map<String, dynamic>> badges) {
     final query = _pesquisa.trim().toLowerCase();
@@ -51,15 +59,27 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
     if (_filterOptions.nivel != 'todos') {
       final String lvl = _filterOptions.nivel;
       filtered = filtered.where((b) {
+        final nivelId = int.tryParse(b['nivelId']?.toString() ?? '');
+        int? lvlFilterId = int.tryParse(lvl);
+        if (lvlFilterId == null) {
+          if (lvl == 'basico') lvlFilterId = 1;
+          if (lvl == 'intermedio') lvlFilterId = 2;
+          if (lvl == 'senior') lvlFilterId = 3;
+          if (lvl == 'especialista') lvlFilterId = 4;
+          if (lvl == 'lider') lvlFilterId = 5;
+        }
+        if (nivelId != null && lvlFilterId != null) {
+          return nivelId == lvlFilterId;
+        }
         final nivel = b['nivel'];
-        final nivelNome = (nivel is Map<String, dynamic> ? nivel['nome_nivel'] : b['nivelNome'] ?? '').toString().toLowerCase();
-        final title = (b['titulo'] ?? b['nome_badge'] ?? '').toString().toLowerCase();
+        final nivelNome = (nivel is Map<String, dynamic> ? nivel['nome_nivel'] : b['nivelNome'] ?? b['nivel'] ?? '').toString().toLowerCase();
+        final title = (b['titulo'] ?? b['nome_badge'] ?? b['title'] ?? '').toString().toLowerCase();
         if (lvl == 'basico') return nivelNome.contains('básico') || nivelNome.contains('basico') || title.contains('básico') || title.contains('basico') || title.contains('practitioner');
         if (lvl == 'intermedio') return nivelNome.contains('intermédio') || nivelNome.contains('intermedio') || title.contains('intermédio') || title.contains('intermedio') || title.contains('master');
         if (lvl == 'senior') return nivelNome.contains('sénior') || nivelNome.contains('senior') || title.contains('sénior') || title.contains('senior') || title.contains('pro') || title.contains('avançado') || title.contains('avancado');
         if (lvl == 'especialista') return nivelNome.contains('especialista') || title.contains('especialista');
         if (lvl == 'lider') return nivelNome.contains('líder') || nivelNome.contains('lider') || title.contains('líder') || title.contains('lider');
-        return true;
+        return false;
       }).toList();
     }
 
@@ -78,13 +98,25 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
     if (_filterOptions.serviceLine != 'todos') {
       final String sl = _filterOptions.serviceLine;
       filtered = filtered.where((b) {
+        final slId = int.tryParse(b['serviceLineId']?.toString() ?? '');
+        int? slFilterId = int.tryParse(sl);
+        if (slFilterId == null) {
+          if (sl == 'cloud') slFilterId = 1;
+          if (sl == 'appdev') slFilterId = 2;
+          if (sl == 'enterprise') slFilterId = 3;
+          if (sl == 'security') slFilterId = 4;
+        }
+        if (slId != null && slFilterId != null) {
+          return slId == slFilterId;
+        }
         final title = (b['title'] ?? b['titulo'] ?? b['nome'] ?? b['nome_badge'] ?? '').toString().toLowerCase();
-        final area = (b['area'] ?? b['areaNome'] ?? b['category'] ?? '').toString().toLowerCase();
-        if (sl == 'cloud') return area.contains('cloud') || title.contains('cloud') || title.contains('aws');
-        if (sl == 'appdev') return area.contains('dev') || area.contains('low') || area.contains('design') || title.contains('flutter') || title.contains('java') || title.contains('scrum') || title.contains('outsystems');
-        if (sl == 'enterprise') return title.contains('sap') || title.contains('salesforce') || title.contains('oracle');
-        if (sl == 'security') return area.contains('security') || area.contains('segurança') || area.contains('cyber') || title.contains('security') || title.contains('segurança') || title.contains('cyber');
-        return true;
+        final area = (b['area'] ?? b['areaNome'] ?? b['category'] ?? b['categoria'] ?? '').toString().toLowerCase();
+        final slNome = (b['serviceLineNome'] ?? '').toString().toLowerCase();
+        if (sl == 'cloud' || sl == '1') return slNome.contains('cloud') || area.contains('cloud') || title.contains('cloud') || title.contains('aws');
+        if (sl == 'appdev' || sl == '2') return slNome.contains('app') || slNome.contains('dev') || area.contains('dev') || area.contains('low') || area.contains('design') || title.contains('flutter') || title.contains('java') || title.contains('scrum') || title.contains('outsystems');
+        if (sl == 'enterprise' || sl == '3') return slNome.contains('enterprise') || title.contains('sap') || title.contains('salesforce') || title.contains('oracle');
+        if (sl == 'security' || sl == '4') return slNome.contains('security') || slNome.contains('segurança') || slNome.contains('cyber') || area.contains('security') || area.contains('segurança') || area.contains('cyber') || title.contains('security') || title.contains('segurança') || title.contains('cyber');
+        return false;
       }).toList();
     }
 
@@ -92,23 +124,38 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
     if (_filterOptions.learningPath != 'todos') {
       final String lp = _filterOptions.learningPath;
       filtered = filtered.where((b) {
+        final lpId = int.tryParse(b['learningPathId']?.toString() ?? '');
+        int? lpFilterId = int.tryParse(lp);
+        if (lpFilterId == null) {
+          if (lp == 'digital_innovation') lpFilterId = 1;
+          if (lp == 'cloud_solutions') lpFilterId = 2;
+          if (lp == 'lowcode_agile') lpFilterId = 3;
+          if (lp == 'cybersecurity') lpFilterId = 4;
+          if (lp == 'devops_agile') lpFilterId = 5;
+        }
+        if (lpId != null && lpFilterId != null) {
+          return lpId == lpFilterId;
+        }
         final title = (b['title'] ?? b['titulo'] ?? b['nome'] ?? b['nome_badge'] ?? '').toString().toLowerCase();
-        final areaVal = (b['area'] ?? b['areaNome'] ?? b['category'] ?? '').toString().toLowerCase();
-        if (lp == 'digital_innovation') return title.contains('digital') || title.contains('innovation');
-        if (lp == 'cloud_solutions') return areaVal.contains('cloud') || title.contains('cloud') || title.contains('aws');
-        if (lp == 'lowcode_agile') return areaVal.contains('low') || title.contains('low') || title.contains('outsystems') || title.contains('scrum');
-        if (lp == 'cybersecurity') return areaVal.contains('security') || areaVal.contains('segurança') || areaVal.contains('cyber') || title.contains('security') || title.contains('segurança') || title.contains('cyber');
-        if (lp == 'devops_agile') return areaVal.contains('dev') || title.contains('devops') || title.contains('agile');
-        return true;
+        final areaVal = (b['area'] ?? b['areaNome'] ?? b['category'] ?? b['categoria'] ?? '').toString().toLowerCase();
+        final lpNome = (b['learningPathNome'] ?? '').toString().toLowerCase();
+        if (lp == 'digital_innovation' || lp == '1') return lpNome.contains('digital') || lpNome.contains('innovation') || title.contains('digital') || title.contains('innovation');
+        if (lp == 'cloud_solutions' || lp == '2') return lpNome.contains('cloud') || areaVal.contains('cloud') || title.contains('cloud') || title.contains('aws');
+        if (lp == 'lowcode_agile' || lp == '3') return lpNome.contains('low') || lpNome.contains('agile') || areaVal.contains('low') || title.contains('low') || title.contains('outsystems') || title.contains('scrum');
+        if (lp == 'cybersecurity' || lp == '4') return lpNome.contains('security') || lpNome.contains('segurança') || lpNome.contains('cyber') || areaVal.contains('security') || areaVal.contains('segurança') || areaVal.contains('cyber') || title.contains('security') || title.contains('segurança') || title.contains('cyber');
+        if (lp == 'devops_agile' || lp == '5') return lpNome.contains('devops') || lpNome.contains('agile') || areaVal.contains('dev') || title.contains('devops') || title.contains('agile');
+        return false;
       }).toList();
     }
 
     // Apply Sorting
     filtered.sort((a, b) {
-      final nameA = (a['titulo'] ?? a['nome_badge'] ?? '').toString().toLowerCase();
-      final nameB = (b['titulo'] ?? b['nome_badge'] ?? '').toString().toLowerCase();
-      final ptsA = int.tryParse((a['pontos'] ?? '0').toString()) ?? 0;
-      final ptsB = int.tryParse((b['pontos'] ?? '0').toString()) ?? 0;
+      final rawA = (a['titulo'] ?? a['nome_badge'] ?? a['title'] ?? '').toString();
+      final rawB = (b['titulo'] ?? b['nome_badge'] ?? b['title'] ?? '').toString();
+      final nameA = _removerAcentos(rawA).toLowerCase().trim();
+      final nameB = _removerAcentos(rawB).toLowerCase().trim();
+      final ptsA = int.tryParse((a['pontos'] ?? a['points'] ?? '0').toString()) ?? 0;
+      final ptsB = int.tryParse((b['pontos'] ?? b['points'] ?? '0').toString()) ?? 0;
 
       if (_filterOptions.ordenarPor == 'nome_asc') {
         return nameA.compareTo(nameB);
@@ -124,7 +171,6 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
 
     return filtered;
   }
-
   String _textoBadge(Map<String, dynamic> badge) {
     final area = badge['area'];
     final nivel = badge['nivel'];

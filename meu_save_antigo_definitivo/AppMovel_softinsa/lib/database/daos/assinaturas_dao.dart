@@ -185,7 +185,10 @@ class AssinaturasDao {
       SELECT ba.id_badge
       FROM ${DatabaseSchema.badgesAssinaturaTable} ba
       INNER JOIN ${DatabaseSchema.assinaturaTable} a ON ba.id_assinatura_local = a.id_assinatura_local
+      INNER JOIN ${DatabaseSchema.registoBadgesTable} rb ON rb.id_badge = ba.id_badge AND rb.id_utilizador = a.id_proprietario
       WHERE a.id_proprietario = ?
+        AND (rb.expirado IS NOT 1 AND rb.expirado != 1)
+        AND (rb.deleted_registo IS NOT 1)
     ''', [userId]);
 
     return rows.map((row) => row['id_badge'] as int).toList();

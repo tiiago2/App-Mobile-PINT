@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import '../database/local/secure_storage.dart';
 
 class ApiException implements Exception {
   final int? statusCode;
@@ -115,10 +116,12 @@ class ApiService {
   Future<String> refreshAccessToken({
     required String refreshToken,
   }) async {
+    final deviceId = await SecureStorage.getDeviceId() ?? 'dispositivo_flutter_1';
     final json = await _postJson(
-      '/refresh-token',
+      '/mobile/auth/refresh',
       body: {
-        'refreshToken': refreshToken,
+        'refresh_token': refreshToken,
+        'device_id': deviceId,
       },
     );
 

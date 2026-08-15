@@ -94,7 +94,7 @@ class DatabaseSchema {
       descricao_requisito TEXT NOT NULL,
       requisito_json TEXT,
       update_requisito TEXT,
-      deleted_requisito TEXT
+      deleted_requisito INT
     )
   ''';
 
@@ -130,22 +130,23 @@ class DatabaseSchema {
   static const String createDocumentosTable = '''
     CREATE TABLE IF NOT EXISTS $documentosSubmissaoTable (
       id_ficheiro_local INTEGER PRIMARY KEY AUTOINCREMENT,
-      id_ficheiro INTEGER UNIQUE,
       id_submissao_local INTEGER NOT NULL,
+      id_submissao INTEGER,
       id_requisito INTEGER NOT NULL,
+      id_ficheiro INTEGER,
       ficheiro TEXT,
       ficheiro_local TEXT,
+      url_ficheiro TEXT,
       tamanho_bytes INTEGER,
       hash_ficheiro TEXT,
-      upload_status TEXT NOT NULL DEFAULT 'pending',
+      upload_status TEXT,
       upload_error TEXT,
       updated_file TEXT,
-      created_local_at TEXT NOT NULL,
+      created_local_at TEXT,
       synced_at TEXT,
-      sync_status TEXT NOT NULL DEFAULT 'pending_insert',
-      deleted_file INT,
-      FOREIGN KEY (id_submissao_local) REFERENCES $submissoesTable(id_submissao_local) ON DELETE CASCADE,
-      FOREIGN KEY (id_requisito) REFERENCES $requisitosTable(id_requisito)
+      sync_status TEXT DEFAULT 'pending',
+      deleted_file INTEGER DEFAULT 0,
+      FOREIGN KEY (id_submissao_local) REFERENCES $submissoesTable(id_submissao_local) ON DELETE CASCADE
     )
   ''';
 
@@ -160,8 +161,7 @@ class DatabaseSchema {
       historico_json TEXT,
       updated_historico TEXT,
       deleted_historico INT,
-      FOREIGN KEY (id_submissao) REFERENCES $submissoesTable(id_submissao) ON DELETE CASCADE,
-      FOREIGN KEY (id_utilizador) REFERENCES $outrosUsersTable(id_utilizador) ON DELETE CASCADE
+      FOREIGN KEY (id_submissao) REFERENCES $submissoesTable(id_submissao) ON DELETE CASCADE
     )
   ''';
 
@@ -260,11 +260,15 @@ class DatabaseSchema {
   static const String createUsersTable = '''
     CREATE TABLE IF NOT EXISTS $outrosUsersTable (
       id_utilizador INTEGER PRIMARY KEY,
-      nome_user TEXT NOT NULL,
+      nome_user TEXT,
       id_area INTEGER,
       imagem_perfil TEXT,
       update_user TEXT,
-      ativo INT,
+      pontos_semana INTEGER DEFAULT 0,
+      pontos_mes INTEGER DEFAULT 0,
+      pontos_ano INTEGER DEFAULT 0,
+      pontos_totais INTEGER DEFAULT 0,
+      ativo INTEGER DEFAULT 1,
       FOREIGN KEY (id_area) REFERENCES $areasTable(id_area) ON DELETE SET NULL
     )
   ''';
@@ -323,7 +327,7 @@ class DatabaseSchema {
     'CREATE INDEX IF NOT EXISTS idx_submissoes_sync ON $submissoesTable (sync_status);',
     'CREATE INDEX IF NOT EXISTS idx_submissoes_remote ON $submissoesTable (id_submissao);',
     'CREATE INDEX IF NOT EXISTS idx_docs_submissao ON $documentosSubmissaoTable (id_submissao_local);',
-    'CREATE INDEX IF NOT EXISTS idx_docs_upload_status ON $documentosSubmissaoTable (upload_status);',
+    'CREATE INDEX IF NOT EXISTS idx_docs_sync_status ON $documentosSubmissaoTable (sync_status);',
     'CREATE INDEX IF NOT EXISTS idx_objetivos_sync ON $objetivosTable (sync_status);',
     'CREATE INDEX IF NOT EXISTS idx_historico_submissao ON $historicoTable (id_submissao);',
     'CREATE INDEX IF NOT EXISTS idx_notificacoes_user ON $notificacoesTable (id_utilizador);',

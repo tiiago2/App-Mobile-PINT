@@ -18,12 +18,12 @@ import 'package:app_movel_softinsa/pages/home.dart';
 import 'package:app_movel_softinsa/screens/dev_test_screen.dart';
 
 class AppRoutes {
-  static final _rootNavigatorKey = GlobalKey<NavigatorState>();
+  static final rootNavigatorKey = GlobalKey<NavigatorState>();
   static final _shellNavigatorKey = GlobalKey<NavigatorState>();
   static final AuthController _authController = AuthController.instance;
 
   static final router = GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     refreshListenable: _authController,
     initialLocation: '/session-loading',
     redirect: (context, state) {
@@ -65,8 +65,9 @@ class AppRoutes {
       GoRoute(
         path: '/dev-test',
         builder: (context, state) {
-          final userId = _authController.currentUser?['id'] ??
-              _authController.currentUser?['user_id'] ??
+          final userId = int.tryParse(_authController.currentUser?['id']?.toString() ?? '') ??
+              int.tryParse(_authController.currentUser?['user_id']?.toString() ?? '') ??
+              int.tryParse(_authController.currentUser?['id_utilizador']?.toString() ?? '') ??
               1;
           return DevTestScreen(userId: userId);
         },

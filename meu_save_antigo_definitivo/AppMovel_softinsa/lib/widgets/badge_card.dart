@@ -22,6 +22,7 @@ class BadgeCard extends StatelessWidget {
   final DateTime? date;
   final int? progressPercentage;
   final String? alertMessage;
+  final String? imagem;
 
   const BadgeCard({
     super.key,
@@ -34,6 +35,7 @@ class BadgeCard extends StatelessWidget {
     this.date,
     this.progressPercentage,
     this.alertMessage,
+    this.imagem,
   });
 
   String _formatDate(DateTime date) {
@@ -119,7 +121,7 @@ class BadgeCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Circle Icon Avatar
+                // Circle Icon Avatar / Image
                 Container(
                   width: 64,
                   height: 64,
@@ -127,13 +129,26 @@ class BadgeCard extends StatelessWidget {
                     color: avatarColor.withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: Center(
-                    child: Icon(
-                      icon,
-                      color: avatarColor,
-                      size: 28,
-                    ),
-                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: (imagem != null && imagem!.trim().isNotEmpty)
+                      ? Image.network(
+                          imagem!.trim(),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(
+                              icon,
+                              color: avatarColor,
+                              size: 28,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            icon,
+                            color: avatarColor,
+                            size: 28,
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 16),
                 // Title and Subtitle

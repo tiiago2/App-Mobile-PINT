@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uicons/uicons.dart';
+import '../database/daos/service_lines_dao.dart';
+import '../database/daos/learning_paths_dao.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 
@@ -7,8 +9,8 @@ class FilterOptions {
   final String ordenarPor; // 'nome_asc', 'nome_desc', 'pontos_asc', 'pontos_desc'
   final String nivel; // 'todos', 'basico', 'intermedio', 'senior', 'especialista', 'lider'
   final String tipo; // 'todos', 'especial', 'normal'
-  final String serviceLine; // 'todos', 'cloud', 'appdev', 'enterprise', 'security'
-  final String learningPath; // 'todos', 'digital_innovation', 'cloud_solutions', 'lowcode_agile', 'cybersecurity', 'devops_agile'
+  final String serviceLine; // 'todos', or string ID (e.g. '1')
+  final String learningPath; // 'todos', or string ID (e.g. '2')
 
   const FilterOptions({
     this.ordenarPor = 'nome_asc',
@@ -51,7 +53,11 @@ class SearchBarFilter extends StatelessWidget {
     this.onFilterChanged,
   });
 
-  void _showFilterBottomSheet(BuildContext context) {
+  void _showFilterBottomSheet(
+    BuildContext context,
+    List<Map<String, dynamic>> serviceLines,
+    List<Map<String, dynamic>> learningPaths,
+  ) {
     final l10n = AppLocalizations.of(context);
     final current = filterOptions ?? const FilterOptions();
 
@@ -69,6 +75,17 @@ class SearchBarFilter extends StatelessWidget {
         String selTipo = current.tipo;
         String selServiceLine = current.serviceLine;
         String selLearningPath = current.learningPath;
+
+        // Fallback checks to prevent Dropdown Button crash if legacy string values exist
+        final validSlIds = serviceLines.map((sl) => (sl['id_service_line'] ?? sl['service_line_id'] ?? '').toString()).toList();
+        if (selServiceLine != 'todos' && !validSlIds.contains(selServiceLine)) {
+          selServiceLine = 'todos';
+        }
+
+        final validLpIds = learningPaths.map((lp) => (lp['id_learning_path'] ?? lp['learning_path_id'] ?? '').toString()).toList();
+        if (selLearningPath != 'todos' && !validLpIds.contains(selLearningPath)) {
+          selLearningPath = 'todos';
+        }
 
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
@@ -310,10 +327,11 @@ class SearchBarFilter extends StatelessWidget {
                       style: const TextStyle(color: AppCores.fontes, fontSize: 14.0),
                       items: [
                         DropdownMenuItem(value: 'todos', child: Text(l10n?.todos ?? 'Todos')),
-                        DropdownMenuItem(value: 'cloud', child: Text(l10n?.cloudServices ?? 'Cloud Services')),
-                        DropdownMenuItem(value: 'appdev', child: Text(l10n?.appDev ?? 'Application Development')),
-                        DropdownMenuItem(value: 'enterprise', child: Text(l10n?.enterpriseSolutions ?? 'Enterprise Solutions')),
-                        DropdownMenuItem(value: 'security', child: Text(l10n?.securityServices ?? 'Security Services')),
+                        ...serviceLines.map((sl) {
+                          final id = (sl['id_service_line'] ?? sl['service_line_id'] ?? '').toString();
+                          final name = (sl['nome_service_line'] ?? sl['nome'] ?? '').toString();
+                          return DropdownMenuItem(value: id, child: Text(name));
+                        }),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -352,11 +370,11 @@ class SearchBarFilter extends StatelessWidget {
                       style: const TextStyle(color: AppCores.fontes, fontSize: 14.0),
                       items: [
                         DropdownMenuItem(value: 'todos', child: Text(l10n?.todos ?? 'Todos')),
-                        DropdownMenuItem(value: 'digital_innovation', child: Text(l10n?.digitalInnovation ?? 'Digital Innovation')),
-                        DropdownMenuItem(value: 'cloud_solutions', child: Text(l10n?.cloudSolutions ?? 'Cloud Solutions')),
-                        DropdownMenuItem(value: 'lowcode_agile', child: Text(l10n?.lowCodeDev ?? 'Low Code Development')),
-                        DropdownMenuItem(value: 'cybersecurity', child: Text(l10n?.cyberSecurity ?? 'Cyber Security')),
-                        DropdownMenuItem(value: 'devops_agile', child: Text(l10n?.devOpsAgile ?? 'DevOps & Agile')),
+                        ...learningPaths.map((lp) {
+                          final id = (lp['id_learning_path'] ?? lp['learning_path_id'] ?? '').toString();
+                          final name = (lp['nome_learning_path'] ?? lp['nome'] ?? '').toString();
+                          return DropdownMenuItem(value: id, child: Text(name));
+                        }),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -480,11 +498,15 @@ class SearchBarFilter extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         InkWell(
-          onTap: () {
+          onTap: () async {
             if (onFilterPressed != null) {
               onFilterPressed!();
             } else {
-              _showFilterBottomSheet(context);
+              final sls = await ServiceLinesDao.instance.getServiceLines();
+              final lps = await LearningPathsDao.instance.getLearningPaths();
+              if (context.mounted) {
+                _showFilterBottomSheet(context, sls, lps);
+              }
             }
           },
           borderRadius: BorderRadius.circular(AppBorders.padrao),

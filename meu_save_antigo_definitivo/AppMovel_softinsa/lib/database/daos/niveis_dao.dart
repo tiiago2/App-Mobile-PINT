@@ -16,7 +16,7 @@ class NiveisDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.niveisTable,
-      where: 'id_nivel = ? AND deleted_nivel IS NULL',
+      where: 'id_nivel = ? AND deleted_nivel IS NOT 1',
       whereArgs: [nivelId],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class NiveisDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.niveisTable,
-      where: 'deleted_nivel IS NULL',
+      where: 'deleted_nivel IS NOT 1',
     );
   }
 

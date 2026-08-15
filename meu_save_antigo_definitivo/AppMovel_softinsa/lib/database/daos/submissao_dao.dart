@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
@@ -18,7 +19,7 @@ class SubmissoesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.submissoesTable,
-      where: 'id_submissao_local = ? AND deleted_submissao IS NULL',
+      where: 'id_submissao_local = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "false" OR deleted_submissao = "0")',
       whereArgs: [localId],
       limit: 1,
     );
@@ -39,7 +40,7 @@ class SubmissoesDao {
       'id_submissao': intOrNull(cleanRow['id_submissao'] ?? cleanRow['remote_id']),
       'id_utilizador': userId ?? -1,
       'id_badge': badgeId ?? -1,
-      'status': cleanRow['status'] ?? 'rascunho',
+      'status': cleanRow['status'] ?? 'em_progresso',
       'remote_status': cleanRow['remote_status'],
       'data_criacao': cleanRow['data_criacao'] ?? utcNow(),
       'data_submissao': cleanRow['data_submissao'],
@@ -47,14 +48,37 @@ class SubmissoesDao {
       'local_updated_at': utcNow(),
       'updated_submissao': cleanRow['updated_submissao'] ?? cleanRow['server_updated_at'],
       'sync_status': cleanRow['sync_status'] ?? 'pending_insert',
-      'deleted_submissao': cleanRow['deleted_submissao']?.toString(),
+      'deleted_submissao': (cleanRow['deleted_submissao'] == true || cleanRow['deleted_submissao'] == 1 || cleanRow['deleted_submissao'] == 'true' || cleanRow['deleted_submissao'] == '1') ? 1 : 0,
     };
 
-    final localId = await db.insert(
+    int localId = await db.insert(
       DatabaseSchema.submissoesTable,
       normalizedRow,
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+
+    if (localId == 0 || localId == -1) {
+      // Já existe um registo com o mesmo id_submissao, fazemos update em vez de replace para não disparar CASCADE DELETE
+      final idSubmissao = normalizedRow['id_submissao'];
+      if (idSubmissao != null) {
+        await db.update(
+          DatabaseSchema.submissoesTable,
+          normalizedRow,
+          where: 'id_submissao = ?',
+          whereArgs: [idSubmissao],
+        );
+        final existing = await db.query(
+          DatabaseSchema.submissoesTable,
+          columns: ['id_submissao_local'],
+          where: 'id_submissao = ?',
+          whereArgs: [idSubmissao],
+          limit: 1,
+        );
+        if (existing.isNotEmpty) {
+          localId = existing.first['id_submissao_local'] as int;
+        }
+      }
+    }
     
     _changes.add(userId ?? -1);
     return localId;
@@ -65,7 +89,7 @@ class SubmissoesDao {
     final db = await DatabaseHelper.instance.database;
     final localId = submissao['id_submissao_local'] ?? submissao['local_id'];
     if (localId == null) {
-      throw Exception('local_id ou id_submissao_local é obrigatório para update.');
+      throw Exception('local_id ou id_submissao_local Ã© obrigatÃ³rio para update.');
     }
     
     final cleanRow = Map<String, dynamic>.from(submissao);
@@ -103,7 +127,7 @@ class SubmissoesDao {
       if (cleanRow.containsKey('sync_status'))
         'sync_status': cleanRow['sync_status'],
       if (cleanRow.containsKey('deleted_submissao') || cleanRow.containsKey('deleted_at'))
-        'deleted_submissao': cleanRow['deleted_submissao']?.toString() ?? cleanRow['deleted_at']?.toString(),
+        'deleted_submissao': ((cleanRow['deleted_submissao'] ?? cleanRow['deleted_at']) == true || (cleanRow['deleted_submissao'] ?? cleanRow['deleted_at']) == 1 || (cleanRow['deleted_submissao'] ?? cleanRow['deleted_at']) == 'true' || (cleanRow['deleted_submissao'] ?? cleanRow['deleted_at']) == '1') ? 1 : 0,
     };
 
     await db.update(
@@ -118,44 +142,118 @@ class SubmissoesDao {
 
   /// Batch upserts submissions from server sync.
   Future<void> upsertFromSync(List<Map<String, dynamic>> dados) async {
+    debugPrint('ðŸ“¥ [SubmissoesDao] upsertFromSync chamado com ${dados.length} registos vindos do servidor.');
     final db = await DatabaseHelper.instance.database;
-    final batch = db.batch();
-    for (final raw in dados) {
-      final remoteId = intOrNull(raw['id_submissao'] ?? raw['remote_id'] ?? raw['id']);
-      final userId = intOrNull(raw['id_utilizador'] ?? raw['user_id']);
-      final badgeId = intOrNull(raw['id_badge'] ?? raw['badge_id']);
+    int gravadosComSucesso = 0;
+    int ignorados = 0;
 
-      if (remoteId == null || userId == null || badgeId == null) {
-        print('⚠️ [SubmissoesDao] Ignorado: id_submissao=$remoteId, id_utilizador=$userId, id_badge=$badgeId');
-        continue;
+    await db.transaction((txn) async {
+      for (final raw in dados) {
+        try {
+          final remoteId = intOrNull(raw['id_submissao'] ?? raw['remote_id'] ?? raw['id']);
+          final userId = intOrNull(raw['id_utilizador'] ?? raw['user_id']);
+          final badgeId = intOrNull(raw['id_badge'] ?? raw['badge_id']);
+
+          if (remoteId == null || userId == null || badgeId == null) {
+            debugPrint('âš ï¸ [SubmissoesDao] Ignorado por chaves nulas: id_submissao=$remoteId (original: ${raw['id_submissao'] ?? raw['id']}), id_utilizador=$userId (original: ${raw['id_utilizador'] ?? raw['user_id']}), id_badge=$badgeId (original: ${raw['id_badge'] ?? raw['badge_id']})');
+            ignorados++;
+            continue;
+          }
+
+          final cleanRow = {
+            'id_submissao': remoteId,
+            'id_utilizador': userId,
+            'id_badge': badgeId,
+            'status': raw['status'] ?? 'em_progresso',
+            'remote_status': raw['remote_status'] ?? raw['status'],
+            'data_criacao': raw['data_criacao'] ?? raw['created_at'] ?? utcNow(),
+            'data_submissao': raw['data_submissao'],
+            'submissao_json': raw['submissao_json'] ?? jsonEncode(raw),
+            'local_updated_at': utcNow(),
+            'updated_submissao': raw['updated_submissao'] ?? raw['server_updated_at'] ?? raw['updated_at']?.toString(),
+            'sync_status': 'synced',
+            'deleted_submissao': (raw['deleted_submissao'] == true || raw['deleted_submissao'] == 1 || raw['deleted_submissao'] == 'true' || raw['deleted_submissao'] == '1') ? 1 : 0,
+          };
+
+          // 1. Check if there's an existing submission with this server ID
+          final existingByRemote = await txn.query(
+            DatabaseSchema.submissoesTable,
+            columns: ['id_submissao_local'],
+            where: 'id_submissao = ?',
+            whereArgs: [remoteId],
+            limit: 1,
+          );
+
+          if (existingByRemote.isNotEmpty) {
+            await txn.update(
+              DatabaseSchema.submissoesTable,
+              cleanRow,
+              where: 'id_submissao_local = ?',
+              whereArgs: [existingByRemote.first['id_submissao_local']],
+            );
+          } else {
+            // 2. Otherwise, check if there's a local pending insertion (id_submissao is NULL) for the same user/badge
+            final pendingLocal = await txn.query(
+              DatabaseSchema.submissoesTable,
+              columns: ['id_submissao_local'],
+              where: 'id_utilizador = ? AND id_badge = ? AND id_submissao IS NULL',
+              whereArgs: [userId, badgeId],
+              limit: 1,
+            );
+
+            if (pendingLocal.isNotEmpty) {
+              await txn.update(
+                DatabaseSchema.submissoesTable,
+                cleanRow,
+                where: 'id_submissao_local = ?',
+                whereArgs: [pendingLocal.first['id_submissao_local']],
+              );
+              debugPrint('ðŸ”— [SubmissoesDao] Vinculado registo local pendente ${pendingLocal.first['id_submissao_local']} ao id_submissao servidor $remoteId');
+            } else {
+              // 3. Otherwise, insert a new record
+              await txn.insert(
+                DatabaseSchema.submissoesTable,
+                cleanRow,
+              );
+            }
+          }
+          gravadosComSucesso++;
+        } catch (e, stack) {
+          debugPrint('âŒ [SubmissoesDao] Erro ao gravar submissÃ£o (remoteId: ${raw['id_submissao'] ?? raw['remote_id'] ?? raw['id']}): $e');
+          debugPrint(stack.toString());
+          rethrow;
+        }
       }
+    });
 
-      final cleanRow = {
-        'id_submissao': remoteId,
-        'id_utilizador': userId,
-        'id_badge': badgeId,
-        'status': raw['status'] ?? 'rascunho',
-        'remote_status': raw['remote_status'] ?? raw['status'],
-        'data_criacao': raw['data_criacao'] ?? raw['created_at'] ?? utcNow(),
-        'data_submissao': raw['data_submissao'],
-        'submissao_json': raw['submissao_json'] ?? jsonEncode(raw),
-        'local_updated_at': utcNow(),
-        'updated_submissao': raw['updated_submissao'] ?? raw['server_updated_at'] ?? raw['updated_at']?.toString(),
-        'sync_status': 'synced',
-        'deleted_submissao': raw['deleted_submissao']?.toString() ?? ((raw['deleted_submissao'] == true || raw['deleted_submissao'] == 1) ? '1' : null),
-      };
-
-      batch.insert(
-        DatabaseSchema.submissoesTable,
-        cleanRow,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+    debugPrint('ðŸ’¾ [SubmissoesDao] Fim do upsertFromSync: $gravadosComSucesso gravados/atualizados com sucesso, $ignorados ignorados.');
     _changes.add(-1);
   }
 
   // --- Legacy Compatibility Methods ---
+
+  Future<int> obterOuCriarRascunhoLocal({required int idBadge, required int userId}) async {
+    final db = await DatabaseHelper.instance.database;
+
+    // Procura se já existe rascunho local ativo para o badge
+    final existentes = await db.query(
+      DatabaseSchema.submissoesTable,
+      where: 'id_badge = ? AND id_utilizador = ? AND (status = "em_progresso" OR status = "rascunho" OR status = "draft" OR status = "emprogresso") AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "false" OR deleted_submissao = "0")',
+      whereArgs: [idBadge, userId],
+      orderBy: 'id_submissao_local DESC',
+      limit: 1,
+    );
+
+    if (existentes.isNotEmpty) {
+      return existentes.first['id_submissao_local'] as int;
+    }
+
+    // Cria novo apenas se não existir
+    return await criarRascunhoLocal(
+      userId: userId,
+      badgeId: idBadge,
+    );
+  }
 
   Future<int> criarRascunhoLocal({
     required int userId,
@@ -169,7 +267,7 @@ class SubmissoesDao {
       final id = await txn.insert(DatabaseSchema.submissoesTable, {
         'id_utilizador': userId,
         'id_badge': badgeId,
-        'status': 'rascunho',
+        'status': 'em_progresso',
         'data_criacao': now,
         'local_updated_at': now,
         'sync_status': 'pending_insert',
@@ -184,7 +282,7 @@ class SubmissoesDao {
         payload: {
           'client_id': recordClientId,
           'id_badge': badgeId,
-          'status': 'rascunho',
+          'status': 'em_progresso',
         },
       );
       return id;
@@ -193,19 +291,55 @@ class SubmissoesDao {
     return localId;
   }
 
-  /// Atualiza o ID do servidor e o sync_status de uma submissão local.
-  Future<void> marcarComoSincronizado(int idLocal, int idServidor, [DatabaseExecutor? executor]) async {
+  /// Reconcilia o ID local com o ID do servidor e atualiza os anexos correspondentes.
+  Future<void> reconciliarIdServidor(int tempLocalId, int realServerId, [DatabaseExecutor? executor]) async {
     final db = executor ?? await DatabaseHelper.instance.database;
-    await db.update(
-      DatabaseSchema.submissoesTable,
-      {
-        'id_submissao': idServidor,
-        'sync_status': 'synced',
-      },
-      where: 'id_submissao_local = ?',
-      whereArgs: [idLocal],
-    );
-    print('✅ [SQLite Update] Submissão local $idLocal atualizada para ID Servidor $idServidor (sync_status = synced)');
+
+    Future<void> action(DatabaseExecutor ex) async {
+      // Evitar erros UNIQUE: se já existe alguma linha antiga com o mesmo id_submissao remoto, removemo-la
+      await ex.delete(
+        DatabaseSchema.submissoesTable,
+        where: 'id_submissao = ? AND id_submissao_local != ?',
+        whereArgs: [realServerId, tempLocalId],
+      );
+
+      await ex.update(
+        DatabaseSchema.submissoesTable,
+        {
+          'id_submissao': realServerId,
+          'sync_status': 'synced',
+          'local_updated_at': utcNow(),
+        },
+        where: 'id_submissao_local = ?',
+        whereArgs: [tempLocalId],
+      );
+
+      await ex.update(
+        DatabaseSchema.documentosSubmissaoTable,
+        {
+          'id_submissao': realServerId,
+          'sync_status': 'synced',
+        },
+        where: 'id_submissao_local = ?',
+        whereArgs: [tempLocalId],
+      );
+    }
+
+    if (executor != null) {
+      await action(executor);
+    } else {
+      await (db as Database).transaction((txn) async {
+        await action(txn);
+      });
+    }
+
+    debugPrint('✅ [SubmissoesDao] Reconciliado ID local $tempLocalId para Servidor $realServerId e atualizados anexos.');
+    _changes.add(-1);
+  }
+
+  /// MantÃ©m assinatura antiga por retrocompatibilidade de chamadas legadas
+  Future<void> marcarComoSincronizado(int idLocal, int idServidor, [DatabaseExecutor? executor]) async {
+    await reconciliarIdServidor(idLocal, idServidor, executor);
   }
 
   Future<void> atualizarEstadoLocal({
@@ -217,7 +351,7 @@ class SubmissoesDao {
     await db.transaction((txn) async {
       final rows = await txn.query(
         DatabaseSchema.submissoesTable,
-        where: 'id_submissao_local = ? AND id_utilizador = ? AND deleted_submissao IS NULL',
+        where: 'id_submissao_local = ? AND id_utilizador = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "false" OR deleted_submissao = "0")',
         whereArgs: [localId, userId],
         limit: 1,
       );
@@ -333,10 +467,10 @@ class SubmissoesDao {
         entity: 'submissoes',
         operation: 'delete',
         localRecordId: localId,
-        clientId: rows.first['client_id'] as String,
+        clientId: clientId,
         payload: {
-          'client_id': rows.first['client_id'],
-          'remote_id': rows.first['remote_id'],
+          'client_id': clientId,
+          'remote_id': remoteIdVal,
         },
       );
     });
@@ -352,7 +486,7 @@ class SubmissoesDao {
     await db.transaction((txn) async {
       final rows = await txn.query(
         DatabaseSchema.submissoesTable,
-        where: 'id_submissao_local = ? AND id_utilizador = ? AND deleted_submissao IS NULL',
+        where: 'id_submissao_local = ? AND id_utilizador = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "false" OR deleted_submissao = "0")',
         whereArgs: [localId, userId],
         limit: 1,
       );
@@ -373,7 +507,7 @@ class SubmissoesDao {
       await txn.update(
         DatabaseSchema.submissoesTable,
         {
-          'status': 'submetida_pendente',
+          'status': 'pendente',
           'submissao_json': jsonEncode(subJsonMap),
           'data_submissao': now,
           'local_updated_at': now,
@@ -394,6 +528,7 @@ class SubmissoesDao {
         payload: {
           'client_id': recordClientId,
           'id_submissao': remoteIdVal,
+          'status': 'pendente',
           'comentario': comentario,
           'data_submissao': now,
           'submit_requested': true,
@@ -415,6 +550,13 @@ class SubmissoesDao {
              a.nome_area AS badge_area,
              b.pontos_badge AS badge_pontos,
              b.imagem AS badge_imagem,
+             b.id_nivel AS nivelId,
+             n.nome_nivel AS nivelNome,
+             sl.id_service_line AS serviceLineId,
+             sl.nome_service_line AS serviceLineNome,
+             lp.id_learning_path AS learningPathId,
+             lp.nome_learning_path AS learningPathNome,
+             b.especial AS especial,
              (SELECT feedback FROM ${DatabaseSchema.historicoTable} h
               WHERE h.id_submissao = s.id_submissao
               ORDER BY h.data_avaliacao DESC LIMIT 1) AS feedback,
@@ -423,8 +565,11 @@ class SubmissoesDao {
               ORDER BY h.data_avaliacao DESC LIMIT 1) AS timestamp_historico
       FROM ${DatabaseSchema.submissoesTable} s
       JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = s.id_badge
-      LEFT JOIN ${DatabaseSchema.areasTable} a ON a.id_area = CAST(b.id_area AS TEXT)
-      WHERE s.id_utilizador = ? AND s.deleted_submissao IS NULL
+      LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      LEFT JOIN ${DatabaseSchema.niveisTable} n ON b.id_nivel = n.id_nivel
+      LEFT JOIN ${DatabaseSchema.serviceLinesTable} sl ON a.id_service_line = sl.id_service_line
+      LEFT JOIN ${DatabaseSchema.learningPathsTable} lp ON sl.id_learning_path = lp.id_learning_path
+      WHERE s.id_utilizador = ? AND (s.deleted_submissao = 0 OR s.deleted_submissao IS NULL OR s.deleted_submissao = "false" OR s.deleted_submissao = "0")
       ORDER BY s.local_updated_at DESC
     ''',
       [userId],
@@ -485,7 +630,7 @@ class SubmissoesDao {
       final owner = await txn.query(
         DatabaseSchema.submissoesTable,
         columns: ['id_submissao_local', 'id_submissao'],
-        where: 'id_submissao_local = ? AND id_utilizador = ? AND deleted_submissao IS NULL',
+        where: 'id_submissao_local = ? AND id_utilizador = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "false" OR deleted_submissao = "0")',
         whereArgs: [submissaoLocalId, userId],
         limit: 1,
       );
@@ -495,7 +640,7 @@ class SubmissoesDao {
       final existing = await txn.query(
         DatabaseSchema.documentosSubmissaoTable,
         where:
-            'id_submissao_local = ? AND id_requisito = ? AND ficheiro_local = ? AND deleted_file IS NULL',
+            'id_submissao_local = ? AND id_requisito = ? AND ficheiro_local = ? AND (deleted_file = 0 OR deleted_file IS NULL)',
         whereArgs: [submissaoLocalId, requisitoId, caminhoLocal],
         limit: 1,
       );
@@ -571,7 +716,7 @@ class SubmissoesDao {
       '''
       SELECT d.* FROM ${DatabaseSchema.documentosSubmissaoTable} d
       JOIN ${DatabaseSchema.submissoesTable} s ON s.id_submissao_local = d.id_submissao_local
-      WHERE s.id_utilizador = ? AND d.id_submissao_local = ? AND d.deleted_file IS NULL
+      WHERE s.id_utilizador = ? AND d.id_submissao_local = ? AND (d.deleted_file = 0 OR d.deleted_file IS NULL)
       ORDER BY d.created_local_at ASC
     ''',
       [userId, submissaoLocalId],
@@ -652,7 +797,7 @@ class SubmissoesDao {
           whereArgs: [userId, remoteId],
           limit: 1,
         );
-        final remoteStatus = raw['status']?.toString() ?? 'rascunho';
+        final remoteStatus = raw['status']?.toString() ?? 'em_progresso';
         int localId;
         if (existing.isNotEmpty && existing.first['sync_status'] != 'synced') {
           localId = existing.first['id_submissao_local'] as int;
@@ -709,7 +854,13 @@ class SubmissoesDao {
           }
         }
         await _aplicarDocumentosRemotos(txn, localId, raw['documentos']);
-        await _aplicarHistoricoRemoto(txn, localId, raw['historico']);
+        // Historico: tentar mÃºltiplas chaves possÃ­veis que a API pode usar dentro da submissÃ£o
+        final historicoAninhado = raw['historico'] ??
+            raw['historico_candidatura'] ??
+            raw['historicos'] ??
+            raw['candidatura_historico'] ??
+            raw['avaliacoes'];
+        await _aplicarHistoricoRemoto(txn, localId, historicoAninhado);
       }
       final synced = await txn.query(
         DatabaseSchema.submissoesTable,
@@ -860,11 +1011,11 @@ class SubmissoesDao {
       'cancelada',
       'cancelado_pelo_sistema',
       'concluido',
-      'concluído',
+      'concluÃ­do',
     }.contains(normalized);
   }
 
-  /// Apaga fisicamente uma submissão pelo ID do servidor.
+  /// Apaga fisicamente uma submissÃ£o pelo ID do servidor.
   Future<void> apagarFisicamente(int serverId) async {
     final db = await DatabaseHelper.instance.database;
     await db.delete(
@@ -877,3 +1028,5 @@ class SubmissoesDao {
 }
 
 typedef SubmissaoDao = SubmissoesDao;
+
+

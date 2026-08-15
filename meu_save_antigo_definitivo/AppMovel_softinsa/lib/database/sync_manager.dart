@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'remote/api_client.dart';
 import 'daos/sync_state_dao.dart';
 import 'daos/areas_dao.dart';
@@ -65,36 +67,80 @@ class SyncManager {
   /// UPLOAD DE DADOS (PUSH SYNC)
   /// ==========================================
   Future<bool> executePushSync(int userId) async {
-    print('🔄 [SyncManager] A iniciar Push Sync...');
+    debugPrint('🔄 [SyncManager] A iniciar Push Sync...');
     final db = await DatabaseHelper.instance.database;
     List<Map<String, dynamic>> pending = [];
 
     String normalizeEntity(String entity) {
       switch (entity.toLowerCase()) {
-        case 'submission': case 'submissao': return 'submissoes';
+        case 'submission': case 'submissao': case 'candidaturas': case 'candidatura': return 'submissoes';
         case 'objective': case 'objetivo': return 'objetivos';
         case 'document': case 'documento': return 'documentos_submissao';
         case 'notification': case 'notificacao': return 'notificacoes';
         case 'profile': case 'perfil': return 'perfil';
         case 'user_badges': case 'registo_badges': return 'registo_badges';
+        case 'signature': case 'assinatura': case 'assinaturas': return 'assinatura';
         default: return entity;
       }
     }
 
     try {
+      // 1. Processar primeiro os uploads físicos dos documentos pendentes
+      await _processPendingDocumentUploads(userId);
+      // 1.2 Processar os uploads de fotos de perfil pendentes
+      await _processPendingProfilePhotoUploads(userId);
+      // 1.3 Pré-upload de fotos de perfil e assinaturas locais na Outbox (conversão para URLs HTTPS)
+      await _preUploadFiles(userId);
+
       pending = await SyncOutboxDao.instance.lerPendentes(userId);
-      print('🔍 [DEBUG 1] Pendentes na Outbox: ${pending.length} itens');
+      debugPrint('🔍 [DEBUG 1] Pendentes na Outbox: ${pending.length} itens');
       if (pending.isEmpty) {
-        print('✅ [SyncManager] Sem registos pendentes no Outbox.');
+        debugPrint('✅ [SyncManager] Sem registos pendentes no Outbox.');
         return true;
       }
 
-      print('📦 [SyncManager] Encontrados ${pending.length} registos pendentes no Outbox.');
+      debugPrint('📦 [SyncManager] Encontrados ${pending.length} registos pendentes no Outbox.');
 
       final List<Map<String, dynamic>> operations = [];
       for (final row in pending) {
         final String rawEntity = row['entity'] as String? ?? '';
         final String entity = normalizeEntity(rawEntity);
+
+        if (entity == 'documentos_submissao' || (entity == 'perfil' && row['operation'] == 'update_foto')) continue;
+
+        // Guarda: se a operação de perfil 'update' ainda tiver um caminho de foto local
+        // (não-HTTPS), significa que o pré-upload para Cloudinary falhou ou ainda não ocorreu.
+        // Neste caso, ignoramos esta operação neste ciclo de sync para evitar enviar um
+        // caminho local inválido ao servidor.
+        if (entity == 'perfil' && row['operation'] == 'update') {
+          try {
+            final rawPayload = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+            final fotoField = rawPayload['foto']?.toString() ?? '';
+            if (fotoField.isNotEmpty && !fotoField.startsWith('http')) {
+              debugPrint('⏭️ [SyncManager] Perfil update ignorado neste ciclo: foto ainda é caminho local ($fotoField). A aguardar upload Cloudinary.');
+              continue;
+            }
+          } catch (_) {}
+        }
+
+        final payload = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+        
+        // Se for submissão, garantir que enviamos o ID remoto real do Postgres se já resolvido localmente
+        if (entity == 'submissoes') {
+          final localId = row['local_record_id'] as int?;
+          if (localId != null && payload['id_submissao'] == null) {
+            final subRows = await db.query(
+              DatabaseSchema.submissoesTable,
+              columns: ['id_submissao'],
+              where: 'id_submissao_local = ?',
+              whereArgs: [localId],
+              limit: 1,
+            );
+            if (subRows.isNotEmpty && subRows.first['id_submissao'] != null) {
+              payload['id_submissao'] = intOrNull(subRows.first['id_submissao']);
+            }
+          }
+        }
 
         operations.add({
           'id': row['id'],
@@ -103,7 +149,7 @@ class SyncManager {
           'operation': row['operation'],
           'local_record_id': row['local_record_id'],
           'client_id': row['client_id'],
-          'payload': jsonDecode(row['payload'] as String),
+          'payload': payload,
           'created_at': row['created_at'],
         });
       }
@@ -117,100 +163,103 @@ class SyncManager {
         return 0;
       });
 
-      // Pré-resolução dinâmica de IDs do servidor para documentos_submissao
-      for (var op in operations) {
-        if (op['entity'] == 'documentos_submissao') {
-          final payload = op['payload'];
-          if (payload is Map<String, dynamic>) {
-            final int? idSubLocal = intOrNull(payload['id_submissao_local']);
-            if (idSubLocal != null && payload['id_submissao'] == null) {
-              final subList = await db.query(
-                DatabaseSchema.submissoesTable,
-                where: 'id_submissao_local = ?',
-                whereArgs: [idSubLocal],
-              );
-              if (subList.isNotEmpty) {
-                final int? idServidorReal = intOrNull(
-                  subList.first['id_submissao'] ??
-                  subList.first['id_servidor'] ??
-                  subList.first['id_submissao_servidor']
-                );
-                if (idServidorReal != null) {
-                  payload['id_submissao'] = idServidorReal;
-                  print('🔗 [SyncManager] Documento para submissão local $idSubLocal associado ao ID Servidor $idServidorReal antes do envio!');
-                }
+      bool pushSuccess = true;
+
+      if (operations.isNotEmpty) {
+        final payloadBatch = {'operations': operations};
+        debugPrint('🌐 [AUDIT] POST URL: https://pint-he77.onrender.com/api/mobile/push');
+        debugPrint('📦 [AUDIT] Payload JSON Enviado: ${jsonEncode(payloadBatch)}');
+        
+        final response = await _api.pushSync(payloadBatch);
+        debugPrint('🌐 [AUDIT] Resposta Completa do Servidor: ${jsonEncode(response)}');
+
+        if (response != null && response['success'] == true) {
+          final processedIds = response['processed_ids'] as Map<String, dynamic>? ?? {};
+          debugPrint('📦 [AUDIT] processed_ids de todas as entidades: ${jsonEncode(processedIds)}');
+
+          if (processedIds.containsKey('submissoes')) {
+            final valSub = processedIds['submissoes'];
+            debugPrint('📦 [AUDIT] processed_ids["submissoes"] raw: $valSub');
+            debugPrint('📦 [AUDIT] processed_ids["submissoes"] tipo: ${valSub.runtimeType}');
+            if (valSub is Map) {
+              for (final entry in valSub.entries) {
+                debugPrint('🔑 [AUDIT] Submissao Entry - Chave: "${entry.key}" (tipo: ${entry.key.runtimeType}), Valor: "${entry.value}" (tipo: ${entry.value.runtimeType})');
               }
             }
           }
-        }
-      }
 
-      final payloadBatch = {'operations': operations};
-      print('📦 [DEBUG 2] Payload Enviado: ${jsonEncode(payloadBatch)}');
-      
-      final response = await _api.pushSync(payloadBatch);
-      print('🌐 [DEBUG 3] Resposta do Servidor: $response');
-
-      if (response != null && response['success'] == true) {
-        final processedIds = response['processed_ids'] as Map<String, dynamic>? ?? {};
-
-        if (processedIds.containsKey('assinatura') || processedIds.containsKey('assinaturas')) {
-          final mapaAssinaturas = processedIds['assinatura'] ?? processedIds['assinaturas'];
-          if (mapaAssinaturas is Map && mapaAssinaturas.isNotEmpty) {
-            await _assinaturasDao.confirmarSincronizacaoEmLote(mapaAssinaturas);
+          if (processedIds.containsKey('assinatura') || processedIds.containsKey('assinaturas')) {
+            final mapaAssinaturas = processedIds['assinatura'] ?? processedIds['assinaturas'];
+            if (mapaAssinaturas is Map && mapaAssinaturas.isNotEmpty) {
+              await _assinaturasDao.confirmarSincronizacaoEmLote(mapaAssinaturas);
+            }
           }
-        }
 
-        await db.transaction((txn) async {
-          // 1. Atualizar IDs locais com IDs do servidor nas tabelas de dados
-          for (final entry in processedIds.entries) {
-            final String rawEntityName = entry.key;
-            final String entityName = normalizeEntity(rawEntityName);
-            final list = entry.value;
+          await db.transaction((txn) async {
+            // 1. Atualizar IDs locais com IDs do servidor nas tabelas de dados
+            for (final entry in processedIds.entries) {
+              final String rawEntityName = entry.key;
+              final String entityName = normalizeEntity(rawEntityName);
+              final val = entry.value;
 
-            if (list is List) {
-              for (final pair in list) {
-                if (pair is Map) {
-                  final idLocal = intOrNull(pair['id_local']);
-                  final idServidor = intOrNull(pair['id_servidor']);
-
+              if (val is Map) {
+                // Caso submissoes, processa o mapa de id_local para id_servidor
+                for (final mapEntry in val.entries) {
+                  final idLocal = intOrNull(mapEntry.key);
+                  final idServidor = intOrNull(mapEntry.value);
+                  debugPrint('🔗 [AUDIT Reconcile] Tentando reconciliar $entityName - idLocal: $idLocal, idServidor: $idServidor');
                   if (idLocal != null && idServidor != null) {
                     if (entityName == 'submissoes') {
-                      await _submissoesDao.marcarComoSincronizado(idLocal, idServidor, txn);
-                    } else if (entityName == 'documentos_submissao') {
-                      await _documentosDao.marcarComoSincronizado(idLocal, idServidor, txn);
-                    } else if (entityName == 'objetivos') {
-                      await _objetivoDao.marcarComoSincronizado(idLocal, idServidor, txn);
-                    } else if (entityName == 'notificacoes') {
-                      await _notificacaoDao.marcarComoSincronizado(idLocal, idServidor, txn);
-                    } else if (entityName == 'perfil') {
-                      await _perfilDao.marcarComoSincronizado(idLocal, idServidor, txn);
-                    } else if (entityName == 'registo_badges') {
-                      await _registoBadgesDao.marcarComoSincronizado(idLocal, idServidor, txn);
+                      await _submissoesDao.reconciliarIdServidor(idLocal, idServidor, txn);
+                    }
+                  }
+                }
+              } else if (val is List) {
+                for (final pair in val) {
+                  if (pair is Map) {
+                    final idLocal = intOrNull(pair['id_local']);
+                    final idServidor = intOrNull(pair['id_servidor']);
+
+                    if (idLocal != null && idServidor != null) {
+                      if (entityName == 'submissoes') {
+                        await _submissoesDao.reconciliarIdServidor(idLocal, idServidor, txn);
+                      } else if (entityName == 'objetivos') {
+                        await _objetivoDao.marcarComoSincronizado(idLocal, idServidor, txn);
+                      } else if (entityName == 'notificacoes') {
+                        await _notificacaoDao.marcarComoSincronizado(idLocal, idServidor, txn);
+                      } else if (entityName == 'perfil') {
+                        await _perfilDao.marcarComoSincronizado(idLocal, idServidor, txn);
+                      } else if (entityName == 'registo_badges') {
+                        await _registoBadgesDao.marcarComoSincronizado(idLocal, idServidor, txn);
+                      }
                     }
                   }
                 }
               }
             }
-          }
 
-          // 2. Marcar operações pendentes na outbox como concluídas
-          for (final row in pending) {
-            await txn.update(
-              DatabaseSchema.syncOutboxTable,
-              {'status': 'completed'},
-              where: 'id = ?',
-              whereArgs: [row['id']],
-            );
-          }
-        });
+            // 2. Marcar apenas as operações estruturais enviadas como concluídas
+            for (final op in operations) {
+              await txn.update(
+                DatabaseSchema.syncOutboxTable,
+                {'status': 'completed'},
+                where: 'id = ?',
+                whereArgs: [op['id']],
+              );
+            }
+          });
+        } else {
+          pushSuccess = false;
+        }
+      }
 
-        print('✅ [SyncManager] Push Sync concluído com sucesso!');
+      if (pushSuccess) {
+        debugPrint('✅ [SyncManager] Push Sync concluído com sucesso!');
         return true;
       }
     } catch (e, stack) {
-      print('💥 [ERRO PUSH]: $e');
-      print('💥 [STACK TRACE]: $stack');
+      debugPrint('💥 [ERRO PUSH]: $e');
+      debugPrint('💥 [STACK TRACE]: $stack');
       
       // Incrementa as tentativas no outbox se falhar
       try {
@@ -229,10 +278,99 @@ class SyncManager {
         }
         await outboxBatch.commit(noResult: true);
       } catch (err) {
-        print('❌ [SyncManager] Erro ao incrementar tentativas do Outbox: $err');
+        debugPrint('❌ [SyncManager] Erro ao incrementar tentativas do Outbox: $err');
       }
     }
     return false;
+  }
+
+  /// Método auxiliar privado para processar os uploads dos documentos (evidências)
+  /// e fazer o envio dos ficheiros físicos um por um utilizando multipart.
+  Future<void> _processPendingDocumentUploads(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    final pendingDocs = await db.query(
+      DatabaseSchema.syncOutboxTable,
+      where: 'user_id = ? AND entity = ? AND status = ?',
+      whereArgs: [userId, 'documentos_submissao', 'pending'],
+    );
+
+    debugPrint('📤 [SyncManager] Encontrados ${pendingDocs.length} documentos pendentes para upload.');
+
+    for (final row in pendingDocs) {
+      try {
+        final payload = jsonDecode(row['payload'] as String);
+        final int? idSubLocal = intOrNull(payload['id_submissao_local']);
+        final int? reqId = intOrNull(payload['id_requisito']);
+        final String? localPath = payload['url_ficheiro'] as String?;
+        final int localDocId = row['local_record_id'] as int;
+
+        if (idSubLocal == null || reqId == null || localPath == null) {
+          await db.update(
+            DatabaseSchema.syncOutboxTable,
+            {'status': 'completed'},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+          continue;
+        }
+
+        final file = File(localPath);
+        if (!await file.exists()) {
+          debugPrint('⚠️ [SyncManager] Ficheiro não encontrado localmente: $localPath. A ignorar upload.');
+          await db.update(
+            DatabaseSchema.syncOutboxTable,
+            {'status': 'completed'},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+          continue;
+        }
+
+        // Tentar obter o ID remoto da submissão para onde associar o ficheiro
+        int? remoteSubId = intOrNull(payload['id_submissao']);
+        if (remoteSubId == null) {
+          final subRows = await db.query(
+            DatabaseSchema.submissoesTable,
+            columns: ['id_submissao'],
+            where: 'id_submissao_local = ?',
+            whereArgs: [idSubLocal],
+            limit: 1,
+          );
+          if (subRows.isNotEmpty && subRows.first['id_submissao'] != null) {
+            remoteSubId = intOrNull(subRows.first['id_submissao']);
+          }
+        }
+
+        if (remoteSubId == null) {
+          debugPrint('⚠️ [SyncManager] Submissão local $idSubLocal ainda não tem ID do servidor. Adiado.');
+          continue;
+        }
+
+        debugPrint('📤 [SyncManager] A carregar ficheiro para o servidor: $localPath');
+        final uploadRes = await _api.uploadDocument(localPath, {
+          'id_submissao': remoteSubId,
+          'id_requisito': reqId,
+        });
+
+        if (uploadRes != null && (uploadRes['success'] == true || uploadRes['id'] != null)) {
+          final int? remoteFileId = intOrNull(uploadRes['id'] ?? uploadRes['id_ficheiro']);
+          if (remoteFileId != null) {
+            await _documentosDao.marcarComoSincronizado(localDocId, remoteFileId);
+          }
+          await db.update(
+            DatabaseSchema.syncOutboxTable,
+            {'status': 'completed'},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+          debugPrint('✅ [SyncManager] Upload de evidência $localDocId concluído com sucesso!');
+        } else {
+          debugPrint('❌ [SyncManager] Falha no upload de evidência $localDocId');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [SyncManager] Erro ao processar upload do documento da outbox: $e');
+      }
+    }
   }
 
   /// ==========================================
@@ -420,5 +558,207 @@ class SyncManager {
     }
 
     return [];
+  }
+
+  Future<Map<String, dynamic>?> uploadEvidence(String filePath, Map<String, dynamic> additionalFields) async {
+    return await _api.uploadDocument(filePath, additionalFields);
+  }
+
+  Future<void> _processPendingProfilePhotoUploads(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    final pendingPhotos = await db.query(
+      DatabaseSchema.syncOutboxTable,
+      where: "user_id = ? AND entity = 'perfil' AND operation = 'update_foto' AND status = ?",
+      whereArgs: [userId, 'pending'],
+    );
+
+    debugPrint('📤 [SyncManager] Encontrados ${pendingPhotos.length} uploads de fotos de perfil pendentes.');
+
+    for (final row in pendingPhotos) {
+      try {
+        final payload = jsonDecode(row['payload'] as String);
+        final String? localPath = payload['local_path'] as String?;
+        if (localPath == null) {
+          await db.update(
+            DatabaseSchema.syncOutboxTable,
+            {'status': 'completed'},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+          continue;
+        }
+
+        final file = File(localPath);
+        if (!await file.exists()) {
+          debugPrint('⚠️ [SyncManager] Foto local não encontrada: $localPath. A ignorar.');
+          await db.update(
+            DatabaseSchema.syncOutboxTable,
+            {'status': 'completed'},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+          continue;
+        }
+
+        debugPrint('📤 [SyncManager] A fazer upload da foto de perfil para o servidor: $localPath');
+        final secureUrl = await _api.uploadProfilePhotoOffline(userId, localPath);
+
+        if (secureUrl != null && secureUrl.isNotEmpty) {
+          // Atualiza o URL remoto na tabela 'perfil' local
+          await db.update(
+            DatabaseSchema.perfilTable,
+            {
+              'imagem_perfil': secureUrl,
+              'sync_status': 'synced',
+            },
+            where: 'id_utilizador = ?',
+            whereArgs: [userId],
+          );
+
+          // Marca a linha do Outbox como concluída
+          await db.update(
+            DatabaseSchema.syncOutboxTable,
+            {'status': 'completed'},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+
+          debugPrint('✅ [SyncManager] Foto de perfil enviada e atualizada no SQLite com sucesso: $secureUrl');
+        } else {
+          debugPrint('❌ [SyncManager] Falha no upload da foto de perfil.');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [SyncManager] Erro ao processar upload de foto de perfil da outbox: $e');
+      }
+    }
+  }
+
+  Future<void> _preUploadFiles(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    final pending = await SyncOutboxDao.instance.lerPendentes(userId);
+
+    for (final row in pending) {
+      final String id = row['id'] as String;
+      final String rawEntity = row['entity'] as String? ?? '';
+      final String entity = rawEntity.toLowerCase();
+      final operation = row['operation'] as String? ?? '';
+
+      if (entity == 'perfil' && (operation == 'update' || operation == 'update_foto')) {
+        try {
+          final payload = Map<String, dynamic>.from(jsonDecode(row['payload'] as String));
+          final String? localPath = payload['foto'] as String? ?? payload['local_path'] as String?;
+
+          if (localPath != null && localPath.isNotEmpty && !localPath.startsWith('http')) {
+            final file = File(localPath);
+            if (!await file.exists()) {
+              debugPrint('⚠️ [SyncManager Pre-Upload] Ficheiro de foto de perfil não encontrado no disco: $localPath');
+              // Limpa o campo para não bloquear o sync do resto do perfil
+              payload['foto'] = null;
+              await db.update(
+                DatabaseSchema.syncOutboxTable,
+                {'payload': jsonEncode(payload)},
+                where: 'id = ?',
+                whereArgs: [id],
+              );
+              continue;
+            }
+
+            debugPrint('📤 [SyncManager Pre-Upload] A fazer upload da foto de perfil: $localPath');
+            final secureUrl = await _api.uploadProfilePhotoOffline(userId, localPath);
+
+            if (secureUrl != null && secureUrl.isNotEmpty) {
+              // Substitui caminho local pela URL Cloudinary no payload
+              payload['foto'] = secureUrl;
+              payload['local_path'] = secureUrl;
+
+              await db.update(
+                DatabaseSchema.syncOutboxTable,
+                {'payload': jsonEncode(payload)},
+                where: 'id = ?',
+                whereArgs: [id],
+              );
+
+              // Atualiza a coluna 'imagem_perfil' no SQLite com o URL remoto
+              await db.update(
+                DatabaseSchema.perfilTable,
+                {
+                  'imagem_perfil': secureUrl,
+                  'sync_status': 'pending_update',
+                },
+                where: 'id_utilizador = ?',
+                whereArgs: [userId],
+              );
+              debugPrint('✅ [SyncManager Pre-Upload] Foto de perfil enviada com sucesso: $secureUrl');
+            } else {
+              debugPrint('❌ [SyncManager Pre-Upload] Falha no upload da foto de perfil. Payload com caminho local NÃO será enviado ao servidor neste ciclo.');
+              // Não alteramos o payload — a guarda no loop de operations vai bloquear o envio
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ [SyncManager Pre-Upload] Erro no pré-upload da foto de perfil: $e');
+        }
+      }
+
+      if (entity == 'assinatura' && (operation == 'update' || operation == 'insert')) {
+        try {
+          final payload = Map<String, dynamic>.from(jsonDecode(row['payload'] as String));
+          final String? localPath = payload['caminho_ficheiro'] as String?;
+
+          if (localPath != null && localPath.isNotEmpty && !localPath.startsWith('http')) {
+            final file = File(localPath);
+            if (await file.exists()) {
+              debugPrint('📤 [SyncManager Pre-Upload] A fazer upload da assinatura: $localPath');
+              final res = await _api.uploadDocument(localPath);
+              final String? secureUrl = (res?['url'] ?? res?['url_ficheiro'] ?? res?['data']?['url'])?.toString();
+
+              if (secureUrl != null && secureUrl.isNotEmpty) {
+                // Substitui no payload
+                payload['caminho_ficheiro'] = secureUrl;
+
+                await db.update(
+                  DatabaseSchema.syncOutboxTable,
+                  {'payload': jsonEncode(payload)},
+                  where: 'id = ?',
+                  whereArgs: [id],
+                );
+
+                // Atualiza a tabela 'assinaturas' no SQLite
+                final sigLocalId = row['local_record_id'] as int;
+                final existingSig = await db.query(
+                  DatabaseSchema.assinaturaTable,
+                  where: 'id_assinatura_local = ?',
+                  whereArgs: [sigLocalId],
+                  limit: 1,
+                );
+
+                if (existingSig.isNotEmpty) {
+                  final rowSig = existingSig.first;
+                  Map<String, dynamic> sigJson = {};
+                  try {
+                    sigJson = Map<String, dynamic>.from(jsonDecode(rowSig['assinatura_json'] as String? ?? '{}'));
+                  } catch (_) {}
+
+                  sigJson['caminho_ficheiro'] = secureUrl;
+
+                  await db.update(
+                    DatabaseSchema.assinaturaTable,
+                    {
+                      'update_assinatura': secureUrl,
+                      'assinatura_json': jsonEncode(sigJson),
+                      'sync_status': 'synced',
+                    },
+                    where: 'id_assinatura_local = ?',
+                    whereArgs: [sigLocalId],
+                  );
+                }
+                debugPrint('✅ [SyncManager Pre-Upload] Assinatura enviada com sucesso: $secureUrl');
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ [SyncManager Pre-Upload] Erro no pré-upload da assinatura: $e');
+        }
+      }
+    }
   }
 }

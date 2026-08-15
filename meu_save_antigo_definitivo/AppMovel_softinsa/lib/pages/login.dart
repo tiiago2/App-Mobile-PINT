@@ -156,7 +156,11 @@ class _LoginScreenState extends State<LoginScreen> {
         // Disparar o Pull Sync inicial para carregar dados do utilizador
         final userIdRaw = response.user?['id'] ?? response.user?['id_utilizador'];
         final userId = userIdRaw != null ? int.tryParse(userIdRaw.toString()) : null;
-        unawaited(SyncManager.instance.executePullSync(userId));
+        if (userId != null) {
+          unawaited(SyncManager.instance.syncAll(userId));
+        } else {
+          unawaited(SyncManager.instance.executePullSync());
+        }
 
         if (!mounted) {
           return;

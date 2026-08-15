@@ -1,9 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:uicons/uicons.dart';
+import 'package:sqflite/sqflite.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 import '../widgets/top_bar_actions.dart';
+import '../database/database_helper.dart';
+import '../database/daos/perfil_dao.dart';
+import '../controllers/auth_controller.dart';
+import '../database/sync_helpers.dart';
 
 class EstatisticasScreen extends StatefulWidget {
   const EstatisticasScreen({super.key});
@@ -15,127 +21,457 @@ class EstatisticasScreen extends StatefulWidget {
 class _EstatisticasScreenState extends State<EstatisticasScreen> {
   String _pointsPeriod = 'Mês';
   String _badgesPeriod = 'Trim';
-  String _distribuicaoAno = '2024';
 
-  final List<String> _anosDistribuicao = const ['2022', '2023', '2024', '2025'];
+  bool _isLoading = true;
+  int _totalBadgesKpiValue = 0;
+  String _lugarGeralKpiValue = '1.º';
+  double _mediaProgressoKpiValue = 0.0;
+  int _objetivosAtivosKpiValue = 0;
 
-  // ── MOCKS ───────────────────────────────────────────────────────────────
-  final List<Map<String, dynamic>> _mockClassificacao = const [
-    {
-      'id': 1,
-      'nome': 'Ana S.',
-      'area': 'Cloud',
-      'service_line': 'Digital',
-      'funcao': 'consultor',
-      'pontos_semana': 245,
-      'pontos_mes': 1200,
-      'pontos_ano': 8400,
-      'pontos_sempre': 12450,
-      'img': 'https://i.pravatar.cc/150?img=47',
-    },
-    {
-      'id': 2,
-      'nome': 'Pedro A.',
-      'area': 'Security',
-      'service_line': 'Cybersecurity',
-      'funcao': 'senior',
-      'pontos_semana': 180,
-      'pontos_mes': 1150,
-      'pontos_ano': 7200,
-      'pontos_sempre': 11200,
-      'img': 'https://i.pravatar.cc/150?img=12',
-    },
-    {
-      'id': 3,
-      'nome': 'João M.',
-      'area': 'Low Code',
-      'service_line': 'Digital',
-      'funcao': 'consultor',
-      'pontos_semana': 210,
-      'pontos_mes': 1100,
-      'pontos_ano': 6800,
-      'pontos_sempre': 10800,
-      'img': 'https://i.pravatar.cc/150?img=15',
-    },
-    {
-      'id': 4,
-      'nome': 'Maria F.',
-      'area': 'Design',
-      'service_line': 'UX/UI',
-      'funcao': 'senior',
-      'pontos_semana': 150,
-      'pontos_mes': 1050,
-      'pontos_ano': 6100,
-      'pontos_sempre': 9800,
-      'img': 'https://i.pravatar.cc/150?img=49',
-    },
-    {
-      'id': 5,
-      'nome': 'Rui P.',
-      'area': 'Cloud',
-      'service_line': 'Data',
-      'funcao': 'tech_lead',
-      'pontos_semana': 120,
-      'pontos_mes': 1000,
-      'pontos_ano': 5900,
-      'pontos_sempre': 9400,
-      'img': 'https://i.pravatar.cc/150?img=33',
-    },
-    {
-      'id': 6,
-      'nome': 'Sofia C.',
-      'area': 'Security',
-      'service_line': 'Cybersecurity',
-      'funcao': 'consultor',
-      'pontos_semana': 90,
-      'pontos_mes': 850,
-      'pontos_ano': 5200,
-      'pontos_sempre': 8100,
-      'img': 'https://i.pravatar.cc/150?img=44',
-    },
-    {
-      'id': 7,
-      'nome': 'Tiago R.',
-      'area': 'Low Code',
-      'service_line': 'Digital',
-      'funcao': 'junior',
-      'pontos_semana': 110,
-      'pontos_mes': 780,
-      'pontos_ano': 4600,
-      'pontos_sempre': 7200,
-      'img': 'https://i.pravatar.cc/150?img=11',
-    },
-    {
-      'id': 8,
-      'nome': 'Inês L.',
-      'area': 'Design',
-      'service_line': 'UX/UI',
-      'funcao': 'junior',
-      'pontos_semana': 75,
-      'pontos_mes': 620,
-      'pontos_ano': 3800,
-      'pontos_sempre': 5900,
-      'img': 'https://i.pravatar.cc/150?img=5',
-    },
-  ];
+  List<Map<String, dynamic>> _listaClassificacao = [];
+  List<Map<String, dynamic>> _distribuicaoBadges = [];
+  List<Map<String, dynamic>> _distribuicaoNiveis = [];
 
-  final List<Map<String, dynamic>> _mockDistribuicaoBadges = const [
-    {'Nome_Area': 'Cloud', 'total_badges': 42, 'cor': 0xFF39639C},
-    {'Nome_Area': 'Security', 'total_badges': 28, 'cor': 0xFF5EA500},
-    {'Nome_Area': 'Design', 'total_badges': 18, 'cor': 0xFFE17100},
-    {'Nome_Area': 'Low Code', 'total_badges': 12, 'cor': 0xFF1C8CAE},
-  ];
+  Map<String, List<Map<String, dynamic>>> _badgeEvolutionData = {
+    'Sem': [],
+    'Mês': [],
+    'Trim': [],
+    'Ano': [],
+  };
 
-  final List<Map<String, dynamic>> _mockNiveis = const [
-    {'label': 'Junior', 'value': 12, 'color': 0xFF5EA500},
-    {'label': 'Intermédio', 'value': 24, 'color': 0xFF1C8CAE},
-    {'label': 'Sénior', 'value': 36, 'color': 0xFFE17100},
-    {'label': 'Especialista', 'value': 18, 'color': 0xFFAE012F},
-    {'label': 'Líder de conhec.', 'value': 10, 'color': 0xFF45556C},
-  ];
+  Map<String, List<Map<String, dynamic>>> _pointsEvolutionData = {
+    'Sem': [],
+    'Mês': [],
+    'Trim': [],
+    'Ano': [],
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarDadosReais();
+  }
+
+  Future<void> _carregarDadosReais() async {
+    try {
+      final user = AuthController.instance.currentUser;
+      final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
+      final db = await DatabaseHelper.instance.database;
+
+      // 1. KPI: Total de Badges (contar linhas da tabela badges onde deleted_badge = 0)
+      final totalBadgesRes = await db.rawQuery('SELECT COUNT(*) as cnt FROM badges WHERE deleted_badge = 0');
+      final totalBadges = Sqflite.firstIntValue(totalBadgesRes) ?? 0;
+
+      // 2. Classificação Geral e Lugar Geral (outros_users ordenado por pontos_totais)
+      final ouRows = await db.rawQuery('''
+        SELECT ou.id_utilizador, ou.nome_user, ou.imagem_perfil, ou.pontos_semana, ou.pontos_mes, ou.pontos_ano, ou.pontos_totais, ou.ativo,
+               a.nome_area
+        FROM outros_users ou
+        LEFT JOIN areas a ON ou.id_area = a.id_area
+        WHERE ou.ativo = 1
+      ''');
+
+      final List<Map<String, dynamic>> todosUsers = [];
+      for (final r in ouRows) {
+        todosUsers.add({
+          'id': r['id_utilizador'],
+          'nome': r['nome_user'] ?? '',
+          'area': r['nome_area'] ?? '',
+          'pontos_semana': r['pontos_semana'] ?? 0,
+          'pontos_mes': r['pontos_mes'] ?? 0,
+          'pontos_ano': r['pontos_ano'] ?? 0,
+          'pontos_sempre': r['pontos_totais'] ?? 0,
+          'img': r['imagem_perfil'],
+          'ativo': r['ativo'],
+        });
+      }
+
+      if (userId != null) {
+        final containsLogged = todosUsers.any((u) => u['id'] == userId);
+        if (!containsLogged) {
+          final perfilMap = await PerfilDao.instance.lerPerfilDoUtilizador(userId);
+          if (perfilMap != null) {
+            String areaNome = '';
+            final areaId = perfilMap['area'];
+            if (areaId != null) {
+              final areaRow = await db.rawQuery('SELECT nome_area FROM areas WHERE id_area = ?', [areaId]);
+              if (areaRow.isNotEmpty) areaNome = areaRow.first['nome_area']?.toString() ?? '';
+            }
+
+            todosUsers.add({
+              'id': userId,
+              'nome': perfilMap['nome'] ?? 'Eu',
+              'area': areaNome,
+              'pontos_semana': 0,
+              'pontos_mes': 0,
+              'pontos_ano': 0,
+              'pontos_sempre': intOrNull(perfilMap['pontos_totais']) ?? 0,
+              'img': perfilMap['foto'],
+              'ativo': 1,
+            });
+          }
+        }
+      }
+
+      todosUsers.sort((a, b) => (b['pontos_sempre'] as int).compareTo(a['pontos_sempre'] as int));
+
+      String lugarGeral = '-';
+      if (userId != null) {
+        final idx = todosUsers.indexWhere((u) => u['id'] == userId);
+        if (idx != -1) {
+          lugarGeral = '${idx + 1}.º';
+        }
+      }
+
+      // 3. Distribuição de Badges por Área (agrupar a partir dos badges conquistados ativos do utilizador)
+      final areaDistRows = await db.rawQuery('''
+        SELECT b.id_area, a.nome_area, COUNT(rb.id_badge) as cnt
+        FROM registo_badges rb
+        INNER JOIN badges b ON rb.id_badge = b.id_badge
+        INNER JOIN areas a ON b.id_area = a.id_area
+        WHERE rb.id_utilizador = ?
+          AND (rb.deleted_registo IS NOT 1)
+          AND (rb.expirado = 0 OR rb.expirado IS NULL)
+          AND (b.deleted_badge IS NOT 1)
+        GROUP BY b.id_area, a.nome_area
+      ''', [userId ?? 0]);
+
+      const areaColors = [
+        0xFF39639C,
+        0xFF5EA500,
+        0xFFE17100,
+        0xFF1C8CAE,
+        0xFFAE012F,
+        0xFF45556C,
+        0xFFE6900A,
+        0xFF805AD5,
+      ];
+
+      final List<Map<String, dynamic>> distBadges = [];
+      for (int i = 0; i < areaDistRows.length; i++) {
+        final r = areaDistRows[i];
+        distBadges.add({
+          'Nome_Area': r['nome_area'] ?? 'Geral',
+          'total_badges': r['cnt'] ?? 0,
+          'cor': areaColors[i % areaColors.length],
+        });
+      }
+
+      // 4. Distribuição por Níveis dos Badges do utilizador
+      final niveisRows = await db.rawQuery('SELECT id_nivel, nome_nivel FROM niveis ORDER BY id_nivel ASC');
+      final List<Map<String, dynamic>> distNiveis = [];
+      const nivelColors = [
+        0xFF5EA500,
+        0xFF1C8CAE,
+        0xFFE17100,
+        0xFFAE012F,
+        0xFF45556C,
+      ];
+
+      for (int i = 0; i < niveisRows.length; i++) {
+        final n = niveisRows[i];
+        final idNivel = n['id_nivel'];
+        final nomeNivel = n['nome_nivel']?.toString() ?? '';
+
+        int conquistadosCount = 0;
+        if (userId != null) {
+          final countRes = await db.rawQuery('''
+            SELECT COUNT(*) as cnt
+            FROM registo_badges rb
+            JOIN badges b ON rb.id_badge = b.id_badge
+            WHERE rb.id_utilizador = ?
+              AND b.id_nivel = ?
+              AND rb.expirado = 0
+              AND rb.deleted_registo = 0
+          ''', [userId, idNivel]);
+          conquistadosCount = Sqflite.firstIntValue(countRes) ?? 0;
+        }
+
+        distNiveis.add({
+          'label': nomeNivel,
+          'value': conquistadosCount,
+          'color': nivelColors[i % nivelColors.length],
+        });
+      }
+
+      // 5. Média de Progresso
+      double mediaProgresso = 0.0;
+      if (userId != null) {
+        final progSubmissoes = await db.rawQuery('''
+          SELECT id_submissao, id_submissao_local, id_badge
+          FROM submissoes
+          WHERE id_utilizador = ?
+            AND status IN ('em_progresso', 'emprogresso', 'draft', 'rascunho')
+            AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = 'false' OR deleted_submissao = '0')
+        ''', [userId]);
+
+        if (progSubmissoes.isNotEmpty) {
+          double somaMedias = 0.0;
+          for (final sub in progSubmissoes) {
+            final subId = sub['id_submissao'];
+            final subLocalId = sub['id_submissao_local'];
+            final badgeId = sub['id_badge'];
+
+            final reqsCountRes = await db.rawQuery('''
+              SELECT COUNT(*) as cnt FROM badges_requisitos WHERE id_badge = ?
+            ''', [badgeId]);
+            final totalReqs = Sqflite.firstIntValue(reqsCountRes) ?? 0;
+
+            final compReqsRes = await db.rawQuery('''
+              SELECT COUNT(DISTINCT id_requisito) as cnt
+              FROM documentos_submissao
+              WHERE (
+                (id_submissao IS NOT NULL AND id_submissao = ?) 
+                OR 
+                (id_submissao_local IS NOT NULL AND id_submissao_local = ?)
+              )
+              AND (deleted_file = 0 OR deleted_file IS NULL OR deleted_file = '')
+            ''', [subId, subLocalId]);
+            final compReqs = Sqflite.firstIntValue(compReqsRes) ?? 0;
+
+            double progress = 0.0;
+            if (totalReqs > 0) {
+              progress = compReqs / totalReqs;
+            } else {
+              progress = 0.45;
+            }
+            somaMedias += progress;
+          }
+          mediaProgresso = somaMedias / progSubmissoes.length;
+        }
+      }
+
+      // 6. Objetivos Ativos (retirar concluídos e expirados)
+      int objetivosAtivos = 0;
+      if (userId != null) {
+        final objRes = await db.rawQuery('''
+          SELECT data_final, data_conclusao
+          FROM objetivos
+          WHERE id_utilizador = ?
+            AND deleted_objetivo = 0
+        ''', [userId]);
+
+        final now = DateTime.now();
+        for (final row in objRes) {
+          final dataConclusaoStr = row['data_conclusao']?.toString() ?? '';
+          final concluido = dataConclusaoStr.isNotEmpty;
+
+          if (!concluido) {
+            final dataFinalStr = row['data_final']?.toString();
+            final dataFinal = dataFinalStr != null ? DateTime.tryParse(dataFinalStr) : null;
+            if (dataFinal != null) {
+              final daysLeft = dataFinal.difference(now).inDays + 1;
+              if (daysLeft > 0) {
+                objetivosAtivos++;
+              }
+            }
+          }
+        }
+      }
+
+
+      // 7. Evolução de Badges e Pontos (Registo de Badges em cada momento)
+      final List<Map<String, dynamic>> userRegistos = [];
+      if (userId != null) {
+        final registosRes = await db.rawQuery('''
+          SELECT rb.data_obtencao, b.pontos_badge
+          FROM registo_badges rb
+          JOIN badges b ON rb.id_badge = b.id_badge
+          WHERE rb.id_utilizador = ?
+            AND rb.deleted_registo = 0
+        ''', [userId]);
+        userRegistos.addAll(registosRes);
+      }
+
+      final DateTime nowDt = DateTime.now();
+      final currentYear = nowDt.year;
+      final currentMonth = nowDt.month;
+
+      final l10n = AppLocalizations.of(context);
+
+      // --- Badges & Points Semana ---
+      final DateTime monday = nowDt.subtract(Duration(days: nowDt.weekday - 1));
+      final startOfWeek = DateTime(monday.year, monday.month, monday.day);
+      final endOfWeek = startOfWeek.add(const Duration(days: 7));
+
+      final List<double> badgesSemValues = List.filled(7, 0.0);
+      final List<double> pointsSemValues = List.filled(7, 0.0);
+      final List<String> semLabels = [
+        l10n?.segundaAbbr ?? 'Seg',
+        l10n?.tercaAbbr ?? 'Ter',
+        l10n?.quartaAbbr ?? 'Qua',
+        l10n?.quintaAbbr ?? 'Qui',
+        l10n?.sextaAbbr ?? 'Sex',
+        l10n?.sabadoAbbr ?? 'Sáb',
+        l10n?.domingoAbbr ?? 'Dom',
+      ];
+      final List<String> semPointsLabels = [];
+      for (int i = 0; i < 7; i++) {
+        final day = startOfWeek.add(Duration(days: i));
+        semPointsLabels.add('${day.day}/${day.month}');
+      }
+
+      // --- Badges & Points Mes ---
+      final List<double> badgesMesValues = List.filled(4, 0.0);
+      final List<double> pointsMesValues = List.filled(4, 0.0);
+      final List<String> mesLabels = [
+        '${l10n?.semanaLabel ?? 'Sem'} 1',
+        '${l10n?.semanaLabel ?? 'Sem'} 2',
+        '${l10n?.semanaLabel ?? 'Sem'} 3',
+        '${l10n?.semanaLabel ?? 'Sem'} 4',
+      ];
+
+      // --- Badges Trim (Jan to Jun of current year) ---
+      final List<double> badgesTrimValues = List.filled(6, 0.0);
+      final List<String> badgesTrimLabels = [
+        l10n?.janeiroAbbr ?? 'Jan',
+        l10n?.fevereiroAbbr ?? 'Fev',
+        l10n?.marcoAbbr ?? 'Mar',
+        l10n?.abrilAbbr ?? 'Abr',
+        l10n?.maioAbbr ?? 'Mai',
+        l10n?.junhoAbbr ?? 'Jun',
+      ];
+
+      // --- Points Trim (last 3 months) ---
+      final List<double> pointsTrimValues = List.filled(3, 0.0);
+      final List<String> pointsTrimLabels = [];
+      final List<int> last3Months = [];
+      final List<int> last3Years = [];
+      for (int i = 2; i >= 0; i--) {
+        DateTime target = DateTime(nowDt.year, nowDt.month - i, 1);
+        last3Months.add(target.month);
+        last3Years.add(target.year);
+        pointsTrimLabels.add(_obterAbbrMes(target.month, l10n));
+      }
+
+      // --- Badges & Points Ano (last 4 years) ---
+      final List<double> badgesAnoValues = List.filled(4, 0.0);
+      final List<double> pointsAnoValues = List.filled(4, 0.0);
+      final List<String> anoLabels = [
+        '${currentYear - 3}',
+        '${currentYear - 2}',
+        '${currentYear - 1}',
+        '${currentYear}',
+      ];
+
+      for (final reg in userRegistos) {
+        final dateStr = reg['data_obtencao']?.toString();
+        if (dateStr == null) continue;
+        final dt = DateTime.tryParse(dateStr);
+        if (dt == null) continue;
+
+        final pts = (reg['pontos_badge'] as num?)?.toDouble() ?? 0.0;
+
+        if (dt.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) && dt.isBefore(endOfWeek)) {
+          final wday = dt.weekday;
+          if (wday >= 1 && wday <= 7) {
+            badgesSemValues[wday - 1] += 1.0;
+            pointsSemValues[wday - 1] += pts;
+          }
+        }
+
+        if (dt.year == currentYear && dt.month == currentMonth) {
+          final day = dt.day;
+          int weekIdx = 0;
+          if (day <= 7) {
+            weekIdx = 0;
+          } else if (day <= 14) {
+            weekIdx = 1;
+          } else if (day <= 21) {
+            weekIdx = 2;
+          } else {
+            weekIdx = 3;
+          }
+          badgesMesValues[weekIdx] += 1.0;
+          pointsMesValues[weekIdx] += pts;
+        }
+
+        if (dt.year == currentYear && dt.month >= 1 && dt.month <= 6) {
+          badgesTrimValues[dt.month - 1] += 1.0;
+        }
+
+        for (int i = 0; i < 3; i++) {
+          if (dt.year == last3Years[i] && dt.month == last3Months[i]) {
+            pointsTrimValues[i] += pts;
+          }
+        }
+
+        final diffYear = currentYear - dt.year;
+        if (diffYear >= 0 && diffYear <= 3) {
+          badgesAnoValues[3 - diffYear] += 1.0;
+          pointsAnoValues[3 - diffYear] += pts;
+        }
+      }
+
+      final finalBadgeEvolutionData = {
+        'Sem': List.generate(7, (i) => {'label': semLabels[i], 'value': badgesSemValues[i]}),
+        'Mês': List.generate(4, (i) => {'label': mesLabels[i], 'value': badgesMesValues[i]}),
+        'Trim': List.generate(6, (i) => {'label': badgesTrimLabels[i], 'value': badgesTrimValues[i]}),
+        'Ano': List.generate(4, (i) => {'label': anoLabels[i], 'value': badgesAnoValues[i]}),
+      };
+
+      final finalPointsEvolutionData = {
+        'Sem': List.generate(7, (i) => {'label': semPointsLabels[i], 'value': pointsSemValues[i]}),
+        'Mês': List.generate(4, (i) => {'label': mesLabels[i], 'value': pointsMesValues[i]}),
+        'Trim': List.generate(3, (i) => {'label': pointsTrimLabels[i], 'value': pointsTrimValues[i]}),
+        'Ano': List.generate(4, (i) => {'label': anoLabels[i], 'value': pointsAnoValues[i]}),
+      };
+
+      if (mounted) {
+        setState(() {
+          _totalBadgesKpiValue = totalBadges;
+          _lugarGeralKpiValue = lugarGeral;
+          _mediaProgressoKpiValue = mediaProgresso;
+          _objetivosAtivosKpiValue = objetivosAtivos;
+          _listaClassificacao = todosUsers;
+          _distribuicaoBadges = distBadges;
+          _distribuicaoNiveis = distNiveis;
+          _badgeEvolutionData = finalBadgeEvolutionData;
+          _pointsEvolutionData = finalPointsEvolutionData;
+          _isLoading = false;
+        });
+      }
+    } catch (e, stack) {
+      print('❌ [EstatisticasScreen] Error loading data: $e');
+      print(stack);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppCores.branco,
+        appBar: AppBar(
+          backgroundColor: AppCores.branco,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: false,
+          titleSpacing: AppTamanhos.colocacao_titulo,
+          title: Text(
+            AppLocalizations.of(context)?.estatisticasTitulo ?? 'Estatísticas',
+            style: const TextStyle(
+              color: AppCores.fontes,
+              fontSize: AppTamanhos.titulo,
+            ),
+          ),
+          actions: const [
+            TopBarActions(showDocumentIcon: true),
+          ],
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(
+            color: AppCores.azulFundo,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppCores.branco,
       appBar: AppBar(
@@ -186,25 +522,25 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       {
         'icon': UIcons.boldRounded.badge,
         'iconColor': AppCores.azulFundo,
-        'value': '100',
+        'value': _totalBadgesKpiValue.toString(),
         'label': l10n?.totalBadgesKpi ?? 'Total de Badges',
       },
       {
         'icon': UIcons.boldRounded.trophy,
         'iconColor': const Color(0xFF5EA500),
-        'value': l10n?.lugarGeralValorKpi ?? '4.º',
+        'value': _lugarGeralKpiValue,
         'label': l10n?.lugarGeralKpi ?? 'Lugar geral',
       },
       {
         'icon': UIcons.boldRounded.chart_histogram,
         'iconColor': const Color(0xFFE17100),
-        'value': '72%',
+        'value': '${(_mediaProgressoKpiValue * 100).toStringAsFixed(0)}%',
         'label': l10n?.mediaProgressoKpi ?? 'Média de Progresso',
       },
       {
         'icon': UIcons.boldRounded.target,
         'iconColor': const Color(0xFFAE012F),
-        'value': '28',
+        'value': _objetivosAtivosKpiValue.toString(),
         'label': l10n?.objetivosAtivosKpi ?? 'Objetivos Ativos',
       },
     ];
@@ -310,7 +646,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
 
   // ── DISTRIBUIÇÃO DE BADGES ──────────────────────────────────────────────
   Widget _buildDistributionCard() {
-    final total = _mockDistribuicaoBadges.fold<int>(
+    final total = _distribuicaoBadges.fold<int>(
       0,
       (sum, item) => sum + (item['total_badges'] as int),
     );
@@ -337,7 +673,6 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              _buildAnoDistribuicao(),
             ],
           ),
           const SizedBox(height: 24),
@@ -355,7 +690,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
                       PieChartData(
                         sectionsSpace: 2,
                         centerSpaceRadius: 36,
-                        sections: _mockDistribuicaoBadges.map((item) {
+                        sections: _distribuicaoBadges.map((item) {
                           final value = item['total_badges'] as int;
                           return PieChartSectionData(
                             color: Color(item['cor'] as int),
@@ -397,7 +732,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: _mockDistribuicaoBadges.map((item) {
+                  children: _distribuicaoBadges.map((item) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: _buildLegendItem(
@@ -504,7 +839,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
   }
 
   List<Map<String, dynamic>> _getListaOrdenadaPreview() {
-    final copia = List<Map<String, dynamic>>.from(_mockClassificacao);
+    final copia = List<Map<String, dynamic>>.from(_listaClassificacao);
     copia.sort((a, b) => (b['pontos_sempre'] as int).compareTo(a['pontos_sempre'] as int));
 
     return copia.asMap().entries.map((entry) {
@@ -545,17 +880,45 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       children: [
         _buildRankIndicator(pos: pos, cor: cor, compact: compact),
         const SizedBox(width: 12),
-        CircleAvatar(
-          radius: compact ? 16 : 20,
-          backgroundColor: AppCores.outline.withValues(alpha: 0.3),
-          backgroundImage: img != null ? NetworkImage(img) : null,
-          child: img == null
-              ? Icon(
-                  UIcons.boldRounded.user,
-                  color: AppCores.fontes,
-                  size: compact ? 14 : 18,
-                )
-              : null,
+        Container(
+          width: compact ? 32 : 40,
+          height: compact ? 32 : 40,
+          decoration: BoxDecoration(
+            color: AppCores.outline.withValues(alpha: 0.3),
+            shape: BoxShape.circle,
+          ),
+          child: ClipOval(
+            child: (img != null && img.isNotEmpty)
+                ? Image.network(
+                    img,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        UIcons.boldRounded.user,
+                        color: AppCores.fontes,
+                        size: compact ? 14 : 18,
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: SizedBox(
+                          width: compact ? 12 : 16,
+                          height: compact ? 12 : 16,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: AppCores.azulFundo,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : Icon(
+                    UIcons.boldRounded.user,
+                    color: AppCores.fontes,
+                    size: compact ? 14 : 18,
+                  ),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -631,19 +994,21 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ClassificacaoModal(dados: _mockClassificacao),
+      builder: (_) => ClassificacaoModal(dados: _listaClassificacao),
     );
   }
 
   // ── BADGES POR NÍVEL ────────────────────────────────────────────────────
   Widget _buildBadgesByLevelCard() {
-    final total = _mockNiveis.fold<int>(
+    final total = _distribuicaoNiveis.fold<int>(
       0,
       (sum, item) => sum + (item['value'] as int),
     );
-    final maxValue = _mockNiveis
-        .map((e) => e['value'] as int)
-        .reduce((a, b) => a > b ? a : b);
+    final maxValue = _distribuicaoNiveis.isEmpty
+        ? 0
+        : _distribuicaoNiveis
+            .map((e) => e['value'] as int)
+            .reduce((a, b) => a > b ? a : b);
 
     return Container(
       width: double.infinity,
@@ -683,7 +1048,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
           ),
           const SizedBox(height: 20),
           Column(
-            children: _mockNiveis.map((level) {
+            children: _distribuicaoNiveis.map((level) {
               final progress = maxValue > 0 ? (level['value'] as int) / maxValue : 0.0;
               final color = Color(level['color'] as int);
 
@@ -748,43 +1113,16 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
 
   // ── EVOLUÇÃO DE BADGES ──────────────────────────────────────────────────
   Widget _buildBadgeEvolutionCard() {
-    final l10n = AppLocalizations.of(context);
-    final Map<String, List<Map<String, dynamic>>> badgeEvolutionData = {
-      'Sem': [
-        {'label': l10n?.segundaAbbr ?? 'Seg', 'value': 2.0},
-        {'label': l10n?.tercaAbbr ?? 'Ter', 'value': 5.0},
-        {'label': l10n?.quartaAbbr ?? 'Qua', 'value': 3.0},
-        {'label': l10n?.quintaAbbr ?? 'Qui', 'value': 8.0},
-        {'label': l10n?.sextaAbbr ?? 'Sex', 'value': 6.0},
-        {'label': l10n?.sabadoAbbr ?? 'Sáb', 'value': 1.0},
-        {'label': l10n?.domingoAbbr ?? 'Dom', 'value': 4.0},
-      ],
-      'Mês': [
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 1', 'value': 12.0},
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 2', 'value': 18.0},
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 3', 'value': 15.0},
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 4', 'value': 22.0},
-      ],
-      'Trim': [
-        {'label': l10n?.janeiroAbbr ?? 'Jan', 'value': 20.0},
-        {'label': l10n?.fevereiroAbbr ?? 'Fev', 'value': 35.0},
-        {'label': l10n?.marcoAbbr ?? 'Mar', 'value': 30.0},
-        {'label': l10n?.abrilAbbr ?? 'Abr', 'value': 55.0},
-        {'label': l10n?.maioAbbr ?? 'Mai', 'value': 45.0},
-        {'label': l10n?.junhoAbbr ?? 'Jun', 'value': 70.0},
-      ],
-      'Ano': [
-        {'label': '2021', 'value': 120.0},
-        {'label': '2022', 'value': 180.0},
-        {'label': '2023', 'value': 240.0},
-        {'label': '2024', 'value': 310.0},
-      ],
-    };
-
-    final currentData = badgeEvolutionData[_badgesPeriod]!;
-    final maxY = currentData.map((e) => e['value'] as double).reduce((a, b) => a > b ? a : b) * 1.2;
+    final currentData = _badgeEvolutionData[_badgesPeriod] ?? [];
+    final double maxY;
+    if (currentData.isEmpty) {
+      maxY = 10.0;
+    } else {
+      final maxVal = currentData.map((e) => (e['value'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
+      maxY = maxVal <= 0 ? 10.0 : maxVal * 1.2;
+    }
     final spots = currentData.asMap().entries.map((entry) {
-      return FlSpot(entry.key.toDouble(), entry.value['value']);
+      return FlSpot(entry.key.toDouble(), (entry.value['value'] as num).toDouble());
     }).toList();
 
     return Container(
@@ -916,38 +1254,14 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
 
   // ── EVOLUÇÃO DE PONTOS ──────────────────────────────────────────────────
   Widget _buildPointsEvolutionCard() {
-    final l10n = AppLocalizations.of(context);
-    final Map<String, List<Map<String, dynamic>>> pointsEvolutionData = {
-      'Sem': [
-        {'label': '5/7', 'value': 0.0},
-        {'label': '6/7', 'value': 0.0},
-        {'label': '7/7', 'value': 1235.0},
-        {'label': '8/7', 'value': 0.0},
-        {'label': '9/7', 'value': 343.0},
-        {'label': '10/7', 'value': 0.0},
-        {'label': '11/7', 'value': 0.0},
-      ],
-      'Mês': [
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 1', 'value': 450.0},
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 2', 'value': 1235.0},
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 3', 'value': 780.0},
-        {'label': '${l10n?.semanaLabel ?? 'Sem'} 4', 'value': 343.0},
-      ],
-      'Trim': [
-        {'label': '${l10n?.mesLabel ?? 'Mês'} 1', 'value': 1800.0},
-        {'label': '${l10n?.mesLabel ?? 'Mês'} 2', 'value': 2350.0},
-        {'label': '${l10n?.mesLabel ?? 'Mês'} 3', 'value': 1580.0},
-      ],
-      'Ano': [
-        {'label': '2021', 'value': 5200.0},
-        {'label': '2022', 'value': 7800.0},
-        {'label': '2023', 'value': 9500.0},
-        {'label': '2024', 'value': 12400.0},
-      ],
-    };
-
-    final currentData = pointsEvolutionData[_pointsPeriod]!;
-    final double maxY = currentData.map((e) => e['value'] as double).reduce((a, b) => a > b ? a : b) * 1.25;
+    final currentData = _pointsEvolutionData[_pointsPeriod] ?? [];
+    final double maxY;
+    if (currentData.isEmpty) {
+      maxY = 100.0;
+    } else {
+      final maxVal = currentData.map((e) => (e['value'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
+      maxY = maxVal <= 0 ? 100.0 : maxVal * 1.25;
+    }
     const Color barColor = Color(0xFF39639C);
     const double chartHeight = 220;
 
@@ -1099,6 +1413,24 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
     );
   }
 
+  String _obterAbbrMes(int month, AppLocalizations? l10n) {
+    switch (month) {
+      case 1: return l10n?.janeiroAbbr ?? 'Jan';
+      case 2: return l10n?.fevereiroAbbr ?? 'Fev';
+      case 3: return l10n?.marcoAbbr ?? 'Mar';
+      case 4: return l10n?.abrilAbbr ?? 'Abr';
+      case 5: return l10n?.maioAbbr ?? 'Mai';
+      case 6: return l10n?.junhoAbbr ?? 'Jun';
+      case 7: return 'Jul';
+      case 8: return 'Ago';
+      case 9: return 'Set';
+      case 10: return 'Out';
+      case 11: return 'Nov';
+      case 12: return 'Dez';
+      default: return '';
+    }
+  }
+
   String _getPeriodoLabel(String option) {
     final l10n = AppLocalizations.of(context);
     switch (option) {
@@ -1163,113 +1495,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
     );
   }
 
-  Widget _buildAnoDistribuicao() {
-    return GestureDetector(
-      onTap: () => _showAnoSelector(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 7.0),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(20.0),
-          border: Border.all(color: AppCores.outline),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _distribuicaoAno,
-              style: const TextStyle(
-                color: AppCores.fontes,
-                fontSize: 12.0,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.keyboard_arrow_down,
-              color: AppCores.fontes,
-              size: 16.0,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  void _showAnoSelector(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(20.0),
-          decoration: const BoxDecoration(
-            color: AppCores.branco,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                AppLocalizations.of(context)?.selecionarAno ?? 'Selecionar ano',
-                style: const TextStyle(
-                  color: AppCores.fontes,
-                  fontSize: 16.0,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ..._anosDistribuicao.map((ano) {
-                final selected = _distribuicaoAno == ano;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _distribuicaoAno = ano);
-                    Navigator.of(context).pop();
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 12.0),
-                    margin: const EdgeInsets.only(bottom: 8.0),
-                    decoration: BoxDecoration(
-                      color: selected ? const Color(0xFFEEF4FF) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          ano,
-                          style: TextStyle(
-                            color: selected ? AppCores.azulFundo : AppCores.fontes,
-                            fontSize: 14.0,
-                            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                          ),
-                        ),
-                        if (selected)
-                          Icon(
-                            UIcons.boldRounded.check,
-                            color: AppCores.azulFundo,
-                            size: 16,
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1333,8 +1559,12 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
 
   List<String> _getValoresUnicos(String categoria) {
     return widget.dados
-        .map((u) => u[categoria] as String?)
-        .where((v) => v != null)
+        .map((u) {
+          final val = u[categoria];
+          if (val == null) return null;
+          return val.toString();
+        })
+        .where((v) => v != null && v!.isNotEmpty)
         .cast<String>()
         .toSet()
         .toList();
@@ -1813,13 +2043,45 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
                 size: destacado ? 30 : 22,
               ),
               const SizedBox(height: 6),
-              CircleAvatar(
-                radius: destacado ? 24 : 18,
-                backgroundColor: AppCores.outline.withValues(alpha: 0.3),
-                backgroundImage: img != null ? NetworkImage(img) : null,
-                child: img == null
-                    ? Icon(UIcons.boldRounded.user, color: AppCores.fontes, size: destacado ? 18 : 14)
-                    : null,
+              Container(
+                width: destacado ? 48 : 36,
+                height: destacado ? 48 : 36,
+                decoration: BoxDecoration(
+                  color: AppCores.outline.withValues(alpha: 0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: ClipOval(
+                  child: (img != null && img.isNotEmpty)
+                      ? Image.network(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              UIcons.boldRounded.user,
+                              color: AppCores.fontes,
+                              size: destacado ? 18 : 14,
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: SizedBox(
+                                width: destacado ? 16 : 12,
+                                height: destacado ? 16 : 12,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: AppCores.azulFundo,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Icon(
+                          UIcons.boldRounded.user,
+                          color: AppCores.fontes,
+                          size: destacado ? 18 : 14,
+                        ),
+                ),
               ),
               const SizedBox(height: 5),
               Text(
@@ -1891,13 +2153,45 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
               ),
             ),
           const SizedBox(width: 12),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppCores.outline.withValues(alpha: 0.3),
-            backgroundImage: img != null ? NetworkImage(img) : null,
-            child: img == null
-                ? Icon(UIcons.boldRounded.user, color: AppCores.fontes, size: 16)
-                : null,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppCores.outline.withValues(alpha: 0.3),
+              shape: BoxShape.circle,
+            ),
+            child: ClipOval(
+              child: (img != null && img.isNotEmpty)
+                  ? Image.network(
+                      img,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          UIcons.boldRounded.user,
+                          color: AppCores.fontes,
+                          size: 16,
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: AppCores.azulFundo,
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  : Icon(
+                      UIcons.boldRounded.user,
+                      color: AppCores.fontes,
+                      size: 16,
+                    ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

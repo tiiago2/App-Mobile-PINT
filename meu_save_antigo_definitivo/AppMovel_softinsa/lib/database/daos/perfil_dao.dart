@@ -250,6 +250,7 @@ class PerfilDao {
         AND sl.id_learning_path = ? 
         AND (rb.deleted_registo IS NOT 1)
         AND (b.deleted_badge IS NOT 1)
+        AND (rb.expirado IS NOT 1 AND rb.expirado != 1)
     ''', [userId, lpId]);
 
     final conquistados = Sqflite.firstIntValue(conquistadosRows) ?? 0;

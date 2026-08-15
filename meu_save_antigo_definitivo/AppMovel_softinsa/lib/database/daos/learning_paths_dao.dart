@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import '../database_helper.dart';
 import '../database_schema.dart';
-import '../sync_helpers.dart';
 
 class LearningPathsDao {
   LearningPathsDao._internal();
@@ -16,7 +15,7 @@ class LearningPathsDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.learningPathsTable,
-      where: 'id_learning_path = ? AND deleted_path IS NULL',
+      where: 'id_learning_path = ? AND deleted_path IS NOT 1',
       whereArgs: [learningPathId],
       limit: 1,
     );
@@ -29,7 +28,7 @@ class LearningPathsDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.learningPathsTable,
-      where: 'deleted_path IS NULL',
+      where: 'deleted_path IS NOT 1',
     );
   }
 

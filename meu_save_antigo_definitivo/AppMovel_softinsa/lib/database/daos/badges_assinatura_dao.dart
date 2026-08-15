@@ -63,6 +63,30 @@ class BadgesAssinaturaDao {
     _changes.add(assinaturaLocalId);
   }
 
+  /// Substitui todos os badges da assinatura pelos novos especificados (max 4).
+  Future<void> definirBadgesAssinatura(int assinaturaLocalId, List<int> badgeIds) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        DatabaseSchema.badgesAssinaturaTable,
+        where: 'id_assinatura_local = ?',
+        whereArgs: [assinaturaLocalId],
+      );
+      final limite = badgeIds.length > 4 ? 4 : badgeIds.length;
+      for (int i = 0; i < limite; i++) {
+        await txn.insert(
+          DatabaseSchema.badgesAssinaturaTable,
+          {
+            'id_assinatura_local': assinaturaLocalId,
+            'id_badge': badgeIds[i],
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+    _changes.add(assinaturaLocalId);
+  }
+
   /// Batch upserts signature badge connections.
   Future<void> upsertFromSync(List<Map<String, dynamic>> dados) async {
     final db = await DatabaseHelper.instance.database;

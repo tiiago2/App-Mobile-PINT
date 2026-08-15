@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../database_helper.dart';
 import '../database_schema.dart';
@@ -49,46 +50,88 @@ class HistoricoDao {
   /// Batch upserts history from sync.
   Future<void> upsertFromSync(List<Map<String, dynamic>> dados) async {
     final db = await DatabaseHelper.instance.database;
+    debugPrint('🔍 [DEBUG HISTORICO DAO] upsertFromSync chamado com ${dados.length} registos.');
     
-    final batch = db.batch();
-    for (final raw in dados) {
-      final valHist = raw['id_historico'] ?? raw['id'] ?? raw['remote_id'];
-      final idHistorico = valHist != null ? int.tryParse(valHist.toString()) : null;
+    int processados = 0;
+    int ignorados = 0;
+    int erros = 0;
 
-      final valUser = raw['id_utilizador'] ?? raw['user_id'];
-      final idUtilizador = valUser != null ? int.tryParse(valUser.toString()) : null;
+    await db.transaction((txn) async {
+      for (final raw in dados) {
+        processados++;
+        try {
+          final valHist = raw['id_historico'] ?? raw['id'] ?? raw['remote_id'];
+          final idHistorico = valHist != null ? int.tryParse(valHist.toString()) : null;
 
-      final valSub = raw['id_submissao'] ?? raw['submissao_id'] ?? raw['id_submissao_local'];
-      final remoteSubmissaoId = valSub != null ? int.tryParse(valSub.toString()) : null;
+          final valUser = raw['id_utilizador'] ?? raw['user_id'];
+          final idUtilizador = valUser != null ? int.tryParse(valUser.toString()) : null;
 
-      if (idHistorico == null || idUtilizador == null || remoteSubmissaoId == null) {
-        print('⚠️ [HistoricoDao] Ignorado por ID nulo: id_historico=$idHistorico, id_utilizador=$idUtilizador, id_submissao=$remoteSubmissaoId');
-        continue;
+          final valSub = raw['id_submissao'] ?? raw['submissao_id'] ?? raw['id_submissao_local'];
+          final remoteSubmissaoId = valSub != null ? int.tryParse(valSub.toString()) : null;
+
+          if (idUtilizador == null || remoteSubmissaoId == null) {
+            debugPrint('⚠️ [DEBUG HISTORICO DAO] Ignorado por IDs compostos nulos: id_historico=$idHistorico, id_utilizador=$idUtilizador, id_submissao=$remoteSubmissaoId');
+            ignorados++;
+            continue;
+          }
+
+          final aceite = (raw['aceite'] == true || raw['aceite'] == 1 || raw['aceite'] == '1') ? 1 : 0;
+          final deletedHistorico = (raw['deleted_historico'] == true || raw['deleted_historico'] == 1 || raw['deleted_historico'] == '1') ? 1 : 0;
+          final dataAvaliacao = raw['data_avaliacao']?.toString() ?? raw['timestamp_historico']?.toString() ?? utcNow();
+
+          final cleanRow = <String, dynamic>{
+            'id_utilizador': idUtilizador,
+            'id_submissao': remoteSubmissaoId,
+            'aceite': aceite,
+            'data_avaliacao': dataAvaliacao,
+            'feedback': raw['feedback']?.toString(),
+            'historico_json': raw['historico_json'] ?? jsonEncode(raw),
+            'updated_historico': raw['updated_historico']?.toString() ?? raw['server_updated_at']?.toString() ?? raw['updated_at']?.toString(),
+            'deleted_historico': deletedHistorico,
+          };
+
+          if (idHistorico != null) {
+            cleanRow['id_historico'] = idHistorico;
+          }
+
+          // Pesquisar existência prévia na base de dados por chave composta (id_submissao + id_utilizador)
+          final existing = await txn.query(
+            DatabaseSchema.historicoTable,
+            columns: ['id_historico'],
+            where: 'id_submissao = ? AND id_utilizador = ?',
+            whereArgs: [remoteSubmissaoId, idUtilizador],
+            limit: 1,
+          );
+
+          if (existing.isNotEmpty) {
+            final localId = existing.first['id_historico'] as int;
+            await txn.update(
+              DatabaseSchema.historicoTable,
+              cleanRow,
+              where: 'id_historico = ?',
+              whereArgs: [localId],
+            );
+          } else {
+            await txn.insert(
+              DatabaseSchema.historicoTable,
+              cleanRow,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        } catch (e, stack) {
+          erros++;
+          debugPrint('❌ [DEBUG HISTORICO DAO] Erro ao inserir registo individual no index $processados: $e');
+          debugPrint(stack.toString());
+        }
       }
+    });
 
-      final aceite = (raw['aceite'] == true || raw['aceite'] == 1 || raw['aceite'] == '1') ? 1 : 0;
-      final deletedHistorico = (raw['deleted_historico'] == true || raw['deleted_historico'] == 1 || raw['deleted_historico'] == '1') ? 1 : 0;
-      final dataAvaliacao = raw['data_avaliacao']?.toString() ?? raw['timestamp_historico']?.toString() ?? utcNow();
-
-      final cleanRow = {
-        'id_historico': idHistorico,
-        'id_utilizador': idUtilizador,
-        'id_submissao': remoteSubmissaoId,
-        'aceite': aceite,
-        'data_avaliacao': dataAvaliacao,
-        'feedback': raw['feedback']?.toString(),
-        'historico_json': raw['historico_json'] ?? jsonEncode(raw),
-        'updated_historico': raw['updated_historico']?.toString() ?? raw['server_updated_at']?.toString() ?? raw['updated_at']?.toString(),
-        'deleted_historico': deletedHistorico,
-      };
-
-      batch.insert(
-        DatabaseSchema.historicoTable,
-        cleanRow,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+    final count = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseSchema.historicoTable}'),
+    );
+    debugPrint('🔍 [DEBUG SQLITE] Contagem física na tabela ${DatabaseSchema.historicoTable}: $count');
+    debugPrint('🔍 [DEBUG HISTORICO DAO] Fim do upsertFromSync. Processados: $processados, Ignorados: $ignorados, Erros: $erros');
+    
     _changes.add(-1);
   }
 

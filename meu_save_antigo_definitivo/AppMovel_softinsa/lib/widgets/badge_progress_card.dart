@@ -27,6 +27,9 @@ class BadgeProgressCard extends StatelessWidget {
   final int progressoPercent;
   final bool especial;
   final String? justificacao;
+  /// Se fornecido, este mapa é passado diretamente ao ecrã de detalhe,
+  /// garantindo que id_badge e estado reais estão disponíveis.
+  final Map<String, dynamic>? badgeDataOverride;
 
   const BadgeProgressCard({
     super.key,
@@ -39,6 +42,7 @@ class BadgeProgressCard extends StatelessWidget {
     required this.progressoPercent,
     this.especial = false,
     this.justificacao,
+    this.badgeDataOverride,
   });
 
   // ---------------------------------------------------------------------------
@@ -65,7 +69,7 @@ class BadgeProgressCard extends StatelessWidget {
         height: 82,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: avatarColor.withOpacity(0.15),
+          color: avatarColor.withValues(alpha: 0.15),
           border: especial
               ? Border.all(color: const Color(0xFFF8AA0B), width: 2.0)
               : null,
@@ -131,7 +135,7 @@ class BadgeProgressCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 4.0,
                     offset: const Offset(0, 2),
                   ),
@@ -186,7 +190,9 @@ class BadgeProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = (progressoPercent.clamp(0, 100)) / 100.0;
-    final badgeMap = {
+    // Se existir um mapa completo, usa-o directamente (preserva id_badge, estado, etc.).
+    // Caso contrário, constrói um mapa mínimo como fallback.
+    final badgeMap = badgeDataOverride ?? {
       'titulo': titulo,
       'categoria': categoria,
       'pontos': pontos,
@@ -195,7 +201,6 @@ class BadgeProgressCard extends StatelessWidget {
       'avatarColor': avatarColor,
       'progresso': progressoPercent,
       'especial': especial,
-      'estado': 'emProgresso',
     };
 
     return GestureDetector(
@@ -249,7 +254,7 @@ class BadgeProgressCard extends StatelessWidget {
                               categoria,
                               style: TextStyle(
                                 fontSize: 13.0,
-                                color: AppCores.fontes.withOpacity(0.5),
+                                color: AppCores.fontes.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -289,7 +294,7 @@ class BadgeProgressCard extends StatelessWidget {
                     '$progressoPercent% completo',
                     style: TextStyle(
                       fontSize: 11.0,
-                      color: AppCores.fontes.withOpacity(0.5),
+                      color: AppCores.fontes.withValues(alpha: 0.5),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
