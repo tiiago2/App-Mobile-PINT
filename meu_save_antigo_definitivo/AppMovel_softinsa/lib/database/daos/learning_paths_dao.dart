@@ -16,7 +16,7 @@ class LearningPathsDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.learningPathsTable,
-      where: 'id_learning_path = ? AND deleted_path IS NULL',
+      where: 'id_learning_path = ? AND (deleted_path = 0 OR deleted_path IS NULL)',
       whereArgs: [learningPathId],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class LearningPathsDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.learningPathsTable,
-      where: 'deleted_path IS NULL',
+      where: 'deleted_path = 0 OR deleted_path IS NULL',
     );
   }
 

@@ -17,7 +17,7 @@ class BadgesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.badgesTable,
-      where: 'id_badge = ? AND deleted_badge IS NULL',
+      where: 'id_badge = ? AND (deleted_badge = 0 OR deleted_badge IS NULL)',
       whereArgs: [badgeId],
       limit: 1,
     );
@@ -30,7 +30,7 @@ class BadgesDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.badgesTable,
-      where: 'deleted_badge IS NULL',
+      where: 'deleted_badge = 0 OR deleted_badge IS NULL',
     );
   }
 
@@ -171,7 +171,7 @@ class BadgesDao {
       '''
       SELECT r.* FROM ${DatabaseSchema.requisitosTable} r
       JOIN ${DatabaseSchema.badgesRequisitosTable} br ON br.id_requisito = r.id_requisito
-      WHERE br.id_badge = ? AND r.deleted_requisito IS NULL
+      WHERE br.id_badge = ? AND (r.deleted_requisito = 0 OR r.deleted_requisito IS NULL)
     ''',
       [badgeId],
     );

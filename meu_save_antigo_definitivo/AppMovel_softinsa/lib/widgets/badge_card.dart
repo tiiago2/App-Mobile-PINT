@@ -124,7 +124,7 @@ class BadgeCard extends StatelessWidget {
                   width: 64,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: avatarColor.withOpacity(0.15),
+                    color: avatarColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -154,7 +154,7 @@ class BadgeCard extends StatelessWidget {
                         category,
                         style: TextStyle(
                           fontSize: 14,
-                          color: AppCores.fontes.withOpacity(0.5),
+                          color: AppCores.fontes.withValues(alpha: 0.5),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -226,7 +226,7 @@ class BadgeCard extends StatelessWidget {
                     config['detail'],
                     style: TextStyle(
                       fontSize: 12,
-                      color: config['detailColor'] ?? AppCores.fontes.withOpacity(0.5),
+                      color: config['detailColor'] ?? AppCores.fontes.withValues(alpha: 0.5),
                       fontWeight: FontWeight.w500,
                     ),
                   ),

@@ -18,7 +18,7 @@ class SubmissoesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.submissoesTable,
-      where: 'id_submissao_local = ? AND deleted_submissao IS NULL',
+      where: 'id_submissao_local = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL)',
       whereArgs: [localId],
       limit: 1,
     );
@@ -217,7 +217,7 @@ class SubmissoesDao {
     await db.transaction((txn) async {
       final rows = await txn.query(
         DatabaseSchema.submissoesTable,
-        where: 'id_submissao_local = ? AND id_utilizador = ? AND deleted_submissao IS NULL',
+        where: 'id_submissao_local = ? AND id_utilizador = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL)',
         whereArgs: [localId, userId],
         limit: 1,
       );
@@ -352,7 +352,7 @@ class SubmissoesDao {
     await db.transaction((txn) async {
       final rows = await txn.query(
         DatabaseSchema.submissoesTable,
-        where: 'id_submissao_local = ? AND id_utilizador = ? AND deleted_submissao IS NULL',
+        where: 'id_submissao_local = ? AND id_utilizador = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL)',
         whereArgs: [localId, userId],
         limit: 1,
       );
@@ -424,7 +424,7 @@ class SubmissoesDao {
       FROM ${DatabaseSchema.submissoesTable} s
       JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = s.id_badge
       LEFT JOIN ${DatabaseSchema.areasTable} a ON a.id_area = CAST(b.id_area AS TEXT)
-      WHERE s.id_utilizador = ? AND s.deleted_submissao IS NULL
+      WHERE s.id_utilizador = ? AND (s.deleted_submissao = 0 OR s.deleted_submissao IS NULL)
       ORDER BY s.local_updated_at DESC
     ''',
       [userId],
@@ -485,7 +485,7 @@ class SubmissoesDao {
       final owner = await txn.query(
         DatabaseSchema.submissoesTable,
         columns: ['id_submissao_local', 'id_submissao'],
-        where: 'id_submissao_local = ? AND id_utilizador = ? AND deleted_submissao IS NULL',
+        where: 'id_submissao_local = ? AND id_utilizador = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL)',
         whereArgs: [submissaoLocalId, userId],
         limit: 1,
       );
@@ -495,7 +495,7 @@ class SubmissoesDao {
       final existing = await txn.query(
         DatabaseSchema.documentosSubmissaoTable,
         where:
-            'id_submissao_local = ? AND id_requisito = ? AND ficheiro_local = ? AND deleted_file IS NULL',
+            'id_submissao_local = ? AND id_requisito = ? AND ficheiro_local = ? AND (deleted_file = 0 OR deleted_file IS NULL)',
         whereArgs: [submissaoLocalId, requisitoId, caminhoLocal],
         limit: 1,
       );
@@ -571,7 +571,7 @@ class SubmissoesDao {
       '''
       SELECT d.* FROM ${DatabaseSchema.documentosSubmissaoTable} d
       JOIN ${DatabaseSchema.submissoesTable} s ON s.id_submissao_local = d.id_submissao_local
-      WHERE s.id_utilizador = ? AND d.id_submissao_local = ? AND d.deleted_file IS NULL
+      WHERE s.id_utilizador = ? AND d.id_submissao_local = ? AND (d.deleted_file = 0 OR d.deleted_file IS NULL)
       ORDER BY d.created_local_at ASC
     ''',
       [userId, submissaoLocalId],

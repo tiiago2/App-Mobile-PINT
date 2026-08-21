@@ -10,42 +10,23 @@ import '../idiomas/app_localizations.dart';
 import 'badge_detalhe.dart';
 import 'historico_badges.dart';
 
-class PerfilScreen extends StatelessWidget {
-  final Map<String, dynamic> mockPerfil = const {
-    'nome': 'João Silva',
-    'area': 'Low Code',
-    'cargo': 'Talent Manager',
-    'email': 'joaosilva@gmail.com',
-    'telefone': '+351 999 999 999',
-    'fotoUrl': 'https://i.pravatar.cc/300?img=11',
-  };
+import '../controllers/perfil_controller.dart';
+import '../controllers/badges_controller.dart';
 
-  final Map<String, dynamic> mockLearningPath = const {
-    'titulo': 'Digital Innovation',
-    'badgesConquistados': 12,
-    'badgesTotal': 20,
-  };
-
-  final Map<String, dynamic> mockAssinatura = const {
-    'badgeIds': [1, 2, 3, 4],
-  };
-
-  final List<Map<String, dynamic>> mockTodosBadges = const [
-    {'id': 1, 'titulo': 'Cloud Básico', 'subtitulo': 'Cloud', 'imagem': 'https://i.pravatar.cc/300?img=11', 'dataAquisicao': '2026-05-20', 'validadeDias': 30, 'pontos': 150},
-    {'id': 2, 'titulo': 'Low Code Básico', 'subtitulo': 'Low Code', 'imagem': 'https://i.pravatar.cc/300?img=12', 'dataAquisicao': '2026-06-17', 'validadeDias': 365, 'pontos': 150},
-    {'id': 3, 'titulo': 'Champion Básico', 'subtitulo': 'Champion', 'imagem': 'https://i.pravatar.cc/300?img=13', 'dataAquisicao': '2025-10-10', 'pontos': 200},
-    {'id': 4, 'titulo': 'Digital Básico', 'subtitulo': 'Digital', 'imagem': 'https://i.pravatar.cc/300?img=14', 'dataAquisicao': '2026-01-05', 'validadeDias': 90, 'pontos': 100},
-    {'id': 5, 'titulo': 'Design Básico', 'subtitulo': 'Design', 'imagem': 'https://i.pravatar.cc/300?img=15', 'dataAquisicao': '2026-07-01', 'pontos': 50},
-    {'id': 6, 'titulo': 'DevOps Básico', 'subtitulo': 'DevOps', 'imagem': 'https://i.pravatar.cc/300?img=16', 'dataAquisicao': '2026-04-20', 'validadeDias': 120, 'pontos': 250},
-    {'id': 7, 'titulo': 'Security Básico', 'subtitulo': 'Security', 'imagem': 'https://i.pravatar.cc/300?img=17', 'dataAquisicao': '2024-11-20', 'pontos': 300},
-    {'id': 8, 'titulo': 'Agile Básico', 'subtitulo': 'Agile', 'imagem': 'https://i.pravatar.cc/300?img=18', 'dataAquisicao': '2026-04-15', 'pontos': 120},
-    {'id': 9, 'titulo': 'Data Básico', 'subtitulo': 'Data', 'imagem': 'https://i.pravatar.cc/300?img=19', 'dataAquisicao': '2025-05-01', 'validadeDias': 30, 'pontos': 180},
-    {'id': 10, 'titulo': 'AI Básico', 'subtitulo': 'AI', 'imagem': 'https://i.pravatar.cc/300?img=20', 'dataAquisicao': '2026-06-10', 'pontos': 400},
-  ];
-
-  final List<int> mockGaleriaIds = const [2, 1, 3, 4];
-
+class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
+
+  @override
+  State<PerfilScreen> createState() => _PerfilScreenState();
+}
+
+class _PerfilScreenState extends State<PerfilScreen> {
+  @override
+  void initState() {
+    super.initState();
+    PerfilController.instance.carregar();
+    BadgesController.instance.carregar();
+  }
 
   Future<void> _mostrarConfirmacaoLogout(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
@@ -210,41 +191,46 @@ class PerfilScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We can use l10n here if needed in the future
-    // final l10n = AppLocalizations.of(context)!;
-
-    final authController = AuthController.instance;
-
-    return AnimatedBuilder(
-      animation: authController,
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        PerfilController.instance,
+        BadgesController.instance,
+        AuthController.instance,
+      ]),
       builder: (context, _) {
+        final authController = AuthController.instance;
+        final perfilController = PerfilController.instance;
+        final badgesController = BadgesController.instance;
+
         final currentUser = authController.currentUser;
+        final perfilLocal = perfilController.perfil;
+
         final nome = _lerString(
-          currentUser,
+          perfilLocal,
           'nome',
-          mockPerfil['nome'] as String,
+          _lerString(currentUser, 'nome', ''),
         );
         final email = _lerString(
-          currentUser,
+          perfilLocal,
           'email',
-          mockPerfil['email'] as String,
+          _lerString(currentUser, 'email', ''),
         );
         final telefone = _lerString(
-          currentUser,
+          perfilLocal,
           'telefone',
-          mockPerfil['telefone'] as String,
+          _lerString(currentUser, 'telefone', '—'),
         );
         final area = _lerStringAninhada(
           currentUser,
           'area',
           'nome',
-          mockPerfil['area'] as String,
+          _lerString(perfilLocal, 'area', '—'),
         );
         final learningPathTitulo = _lerStringAninhada(
           currentUser,
           'learningPath',
           'nome',
-          mockLearningPath['titulo'] as String,
+          _lerString(perfilController.learningPathInfo, 'nome_learning_path', 'Learning Path'),
         );
         final cargoAssinatura = _lerStringAninhada(
           currentUser,
@@ -254,78 +240,113 @@ class PerfilScreen extends StatelessWidget {
             currentUser,
             'area',
             'nome',
-            mockPerfil['cargo'] as String,
+            'Consultor',
           ),
         );
-        final fotoUrl = _lerUrlOuNull(currentUser, 'foto') ??
-            _lerUrlOuNull(currentUser, 'imagem_perfil') ??
-            (mockPerfil['fotoUrl'] as String?);
+        final fotoUrl = _lerUrlOuNull(perfilLocal, 'foto') ??
+            _lerUrlOuNull(currentUser, 'foto') ??
+            _lerUrlOuNull(currentUser, 'imagem_perfil');
+
+        final badges = badgesController.badges;
+        final registos = perfilController.badgesConquistados;
+        final lpInfo = perfilController.learningPathInfo;
+
+        final registosMap = {
+          for (final r in registos)
+            if (r['id_badge'] != null)
+              (int.tryParse(r['id_badge'].toString()) ?? 0): r
+        };
+
+        final badgesComAquisicao = badges.map((b) {
+          final bId = int.tryParse((b['id'] ?? b['id_badge'] ?? '').toString()) ?? 0;
+          final reg = registosMap[bId];
+          return {
+            ...b,
+            if (reg != null) ...{
+              'dataAquisicao': reg['data_obtencao'],
+              'data_obtencao': reg['data_obtencao'],
+              'expirado': reg['expirado'],
+            }
+          };
+        }).toList();
+
+        final badgesConquistados = registos.isNotEmpty
+            ? registos.where((r) => r['expirado'] != 1 && r['expirado'] != true).length
+            : (lpInfo?['badges_conquistados'] as int? ?? 0);
+        final badgesTotal = lpInfo?['badges_total'] as int? ??
+            (badges.isNotEmpty ? badges.length : 0);
+
+        final assinaturaBadges = perfilController.badgesAssinatura;
+        final badgeIdsAssinatura = assinaturaBadges
+            .map((b) => int.tryParse((b['id_badge'] ?? b['id'] ?? '').toString()) ?? 0)
+            .where((id) => id > 0)
+            .toList();
 
         return Scaffold(
-      backgroundColor: AppCores.branco,
-      appBar: AppBar(
-        backgroundColor: AppCores.branco,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: AppTamanhos.colocacao_titulo,
-        title: Text(
-          AppLocalizations.of(context)?.perfilTitulo ?? 'Perfil Pessoal',
-          style: const TextStyle(
-            color: AppCores.fontes,
-            fontSize: AppTamanhos.titulo,
+          backgroundColor: AppCores.branco,
+          appBar: AppBar(
+            backgroundColor: AppCores.branco,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: false,
+            titleSpacing: AppTamanhos.colocacao_titulo,
+            title: Text(
+              AppLocalizations.of(context)?.perfilTitulo ?? 'Perfil Pessoal',
+              style: const TextStyle(
+                color: AppCores.fontes,
+                fontSize: AppTamanhos.titulo,
+              ),
+            ),
+            actions: [
+              TopBarActions(
+                showLogoutIcon: true,
+                showDocumentIcon: true,
+                onLogoutPressed: () => _mostrarConfirmacaoLogout(context),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TopBarActions(
-            showLogoutIcon: true,
-            showDocumentIcon: true,
-            onLogoutPressed: () => _mostrarConfirmacaoLogout(context),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppTamanhos.margemEcra),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Column(
-              children: [
-                CartaoPerfil(
-                  nome: nome,
-                  area: area,
-                  email: email,
-                  telefone: telefone,
-                  fotoUrl: fotoUrl,
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTamanhos.margemEcra),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Column(
+                  children: [
+                    CartaoPerfil(
+                      nome: nome,
+                      area: area,
+                      email: email,
+                      telefone: telefone,
+                      fotoUrl: fotoUrl,
+                    ),
+                    SizedBox(height: AppTamanhos.gapPerfil),
+                    CartaoLearningPath(
+                      titulo: learningPathTitulo,
+                      badgesConquistados: badgesConquistados,
+                      badgesTotal: badgesTotal,
+                    ),
+                    SizedBox(height: AppTamanhos.gapPerfil),
+                    CartaoAssinatura(
+                      nome: nome,
+                      cargo: cargoAssinatura,
+                      email: email,
+                      telefone: telefone,
+                      badgeIds: badgeIdsAssinatura,
+                      todosBadges: badgesComAquisicao,
+                    ),
+                    SizedBox(height: AppTamanhos.gapPerfil),
+                    CartaoGaleriaBadges(
+                      todosBadges: badgesComAquisicao,
+                    ),
+                    SizedBox(height: AppTamanhos.gapPerfil),
+                    CartaoHistoricoBadges(
+                      todosBadges: badgesComAquisicao,
+                    ),
+                  ],
                 ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoLearningPath(
-                  titulo: learningPathTitulo,
-                  badgesConquistados: mockLearningPath['badgesConquistados'],
-                  badgesTotal: mockLearningPath['badgesTotal'],
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoAssinatura(
-                  nome: nome,
-                  cargo: cargoAssinatura,
-                  email: email,
-                  telefone: telefone,
-                  badgeIds: mockAssinatura['badgeIds'],
-                  todosBadges: mockTodosBadges,
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoGaleriaBadges(
-                  todosBadges: mockTodosBadges,
-                ),
-                SizedBox(height: AppTamanhos.gapPerfil),
-                CartaoHistoricoBadges(
-                  todosBadges: mockTodosBadges,
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
         );
       },
     );
@@ -464,7 +485,7 @@ class CartaoPerfil extends StatelessWidget {
           width: 120,
           height: 120,
           decoration: BoxDecoration(
-            color: AppCores.outline.withOpacity(0.3),
+            color: AppCores.outline.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(35.0),
             image: fotoUrl != null
                 ? DecorationImage(
@@ -579,7 +600,7 @@ class CartaoLearningPath extends StatelessWidget {
             borderRadius: BorderRadius.circular(50.0),
             child: LinearProgressIndicator(
               value: progresso,
-              backgroundColor: AppCores.fundo2.withOpacity(0.3),
+              backgroundColor: AppCores.fundo2.withValues(alpha: 0.3),
               valueColor: const AlwaysStoppedAnimation<Color>(AppCores.branco),
               minHeight: 8.0,
             ),
@@ -625,7 +646,7 @@ class CartaoAssinatura extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 6.0),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: AppCores.outline.withOpacity(0.3),
+        color: AppCores.outline.withValues(alpha: 0.3),
         image: imageUrl != null
             ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
             : null,
@@ -732,7 +753,7 @@ class CartaoGaleriaBadges extends StatelessWidget {
               height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppCores.outline.withOpacity(0.3),
+                color: AppCores.outline.withValues(alpha: 0.3),
                 image: imageUrl != null
                     ? DecorationImage(
                         image: NetworkImage(imageUrl),
@@ -943,15 +964,18 @@ class CartaoHistoricoBadges extends StatelessWidget {
   Widget build(BuildContext context) {
     final hoje = DateTime.now();
     final badgesOrdenados = todosBadges.map((b) {
-      final String? dataAquisicaoStr = b['dataAquisicao'];
-      if (dataAquisicaoStr == null) return null;
+      final String? dataAquisicaoStr = (b['dataAquisicao'] ?? b['data_obtencao'])?.toString();
+      if (dataAquisicaoStr == null || dataAquisicaoStr.isEmpty) return null;
       
-      final dataAquisicao = DateTime.parse(dataAquisicaoStr);
+      final dataAquisicao = DateTime.tryParse(dataAquisicaoStr);
+      if (dataAquisicao == null) return null;
+
       DateTime dataRelevante = dataAquisicao;
-      String textoData = 'Conquistado a $dataAquisicaoStr';
+      final dataFormatada = dataAquisicaoStr.length >= 10 ? dataAquisicaoStr.substring(0, 10) : dataAquisicaoStr;
+      String textoData = 'Conquistado a $dataFormatada';
       Color corData = const Color(0xFF1E5FF5); // Azul
       
-      final int? validadeDias = b['validadeDias'];
+      final int? validadeDias = b['validadeDias'] is int ? b['validadeDias'] as int : int.tryParse((b['validadeDias'] ?? b['validade'] ?? '').toString());
       if (validadeDias != null) {
         final dataExpiracao = dataAquisicao.add(Duration(days: validadeDias));
         if (dataExpiracao.isBefore(hoje)) {

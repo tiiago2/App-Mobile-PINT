@@ -10,6 +10,9 @@ import '../database/sync_helpers.dart';
 import '../widgets/top_bar_actions.dart';
 import '../widgets/searchbar_filter.dart';
 
+import '../controllers/perfil_controller.dart';
+import '../controllers/badges_controller.dart';
+
 class EditarPerfilScreen extends StatefulWidget {
   const EditarPerfilScreen({super.key});
 
@@ -20,23 +23,22 @@ class EditarPerfilScreen extends StatefulWidget {
 class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final Map<String, dynamic> mockPerfil = {
-    'nome': 'João Silva',
-    'area': 'Low Code',
-    'email': 'joaosilva@gmail.com',
-    'telefone': '+351 999 999 999',
-    'fotoUrl': 'https://i.pravatar.cc/300?img=11',
-  };
+  List<String> _badgeIdsDisposicao = [];
 
-  List<String> _badgeIdsDisposicao = ['b1', 'b2', 'b3', 'b4'];
-  final List<Map<String, dynamic>> _todosBadges = const [
-    {'id': 'b1', 'nome': 'Low Code', 'imagem': 'https://i.pravatar.cc/300?img=12'},
-    {'id': 'b2', 'nome': 'Outsystems', 'imagem': 'https://i.pravatar.cc/300?img=13'},
-    {'id': 'b3', 'nome': 'Flutter', 'imagem': 'https://i.pravatar.cc/300?img=14'},
-    {'id': 'b4', 'nome': 'AWS', 'imagem': 'https://i.pravatar.cc/300?img=15'},
-    {'id': 'b5', 'nome': 'Scrum', 'imagem': 'https://i.pravatar.cc/300?img=16'},
-    {'id': 'b6', 'nome': 'Java', 'imagem': 'https://i.pravatar.cc/300?img=17'},
-  ];
+  List<Map<String, dynamic>> get _todosBadges {
+    return BadgesController.instance.badges.map((b) {
+      return {
+        'id': (b['id'] ?? b['id_badge'] ?? '').toString(),
+        'nome': b['titulo'] ?? b['nome_badge'] ?? b['nome'] ?? '',
+        'imagem': b['imagem'],
+        'area': b['areaNome'] ?? b['area'] ?? '',
+        'areaNome': b['areaNome'] ?? b['area'] ?? '',
+        'nivelNome': b['nivelNome'] ?? b['nivel'] ?? '',
+        'especial': b['especial'],
+        'pontos': b['pontos'] ?? b['pontos_badge'],
+      };
+    }).toList();
+  }
 
   void _adicionarBadge(String id) {
     if (_badgeIdsDisposicao.length < 4 && !_badgeIdsDisposicao.contains(id)) {
@@ -60,19 +62,27 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   @override
   void initState() {
     super.initState();
-    final user = AuthController.instance.currentUser;
-    final nome = user?['nome']?.toString() ?? user?['nome_user']?.toString() ?? mockPerfil['nome'];
+    PerfilController.instance.carregar();
+    BadgesController.instance.carregar();
+
+    final perfil = PerfilController.instance.perfil ?? AuthController.instance.currentUser;
+    final nome = perfil?['nome']?.toString() ?? perfil?['nome_user']?.toString() ?? '';
     
-    final areaMap = user?['area'];
-    final area = areaMap is Map ? areaMap['nome']?.toString() : (user?['area']?.toString() ?? mockPerfil['area']);
+    final areaMap = perfil?['area'];
+    final area = areaMap is Map ? areaMap['nome']?.toString() : (perfil?['area']?.toString() ?? '');
     
-    final email = user?['email']?.toString() ?? mockPerfil['email'];
-    final telefone = user?['telefone']?.toString() ?? mockPerfil['telefone'];
+    final email = perfil?['email']?.toString() ?? '';
+    final telefone = perfil?['telefone']?.toString() ?? '';
 
     _nomeController = TextEditingController(text: nome);
     _areaController = TextEditingController(text: area);
     _emailController = TextEditingController(text: email);
     _telefoneController = TextEditingController(text: telefone);
+
+    _badgeIdsDisposicao = PerfilController.instance.badgesAssinatura
+        .map((b) => (b['id_badge'] ?? b['id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
   }
 
   @override
@@ -84,7 +94,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     super.dispose();
   }
 
-  void _guardar() {
+  void _guardar() async {
     if (_formKey.currentState!.validate()) {
       final user = AuthController.instance.currentUser;
       final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
@@ -104,25 +114,37 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
           'id_area': user?['id_area']?.toString() ?? areaId,
         };
         
-        PerfilDao.instance.guardarPerfilLocal(
-          userId: userId,
-          perfil: perfilAtualizado,
-        ).then((_) {
+        try {
+          await PerfilDao.instance.guardarPerfilLocal(
+            userId: userId,
+            perfil: perfilAtualizado,
+          );
+
+          final badgeIntIds = _badgeIdsDisposicao
+              .map((id) => int.tryParse(id))
+              .where((id) => id != null && id > 0)
+              .cast<int>()
+              .toList();
+
+          await PerfilController.instance.atualizarBadgesAssinatura(badgeIntIds);
+
           SyncManager.instance.executePushSync(userId).catchError((e) {
             debugPrint('⚠️ [SyncManager] Erro no push sync automático ao editar perfil: $e');
             return false;
           });
-        }).catchError((e) {
+        } catch (e) {
           debugPrint('❌ [EditarPerfil] Erro ao guardar perfil localmente: $e');
-        });
+        }
       }
 
       final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil atualizado com sucesso!')),
-      );
-      if (context.canPop()) {
-        context.pop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil atualizado com sucesso!')),
+        );
+        if (context.canPop()) {
+          context.pop();
+        }
       }
     }
   }
@@ -175,42 +197,49 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: AppCores.outline.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(35.0),
-                          image: mockPerfil['fotoUrl'] != null
-                              ? DecorationImage(
-                                  image: NetworkImage(mockPerfil['fotoUrl']),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: mockPerfil['fotoUrl'] == null
-                            ? const Icon(Icons.person, size: 40, color: AppCores.fontes)
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8.0),
-                          decoration: const BoxDecoration(
-                            color: AppCores.azulFundo,
-                            shape: BoxShape.circle,
+                  child: Builder(
+                    builder: (context) {
+                      final user = AuthController.instance.currentUser;
+                      final fotoUrl = user?['foto']?.toString() ?? user?['imagem_perfil']?.toString();
+
+                      return Stack(
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: AppCores.outline.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(35.0),
+                              image: fotoUrl != null && fotoUrl.isNotEmpty
+                                  ? DecorationImage(
+                                      image: NetworkImage(fotoUrl),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: (fotoUrl == null || fotoUrl.isEmpty)
+                                ? const Icon(Icons.person, size: 40, color: AppCores.fontes)
+                                : null,
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: AppCores.branco,
-                            size: 20,
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8.0),
+                              decoration: const BoxDecoration(
+                                color: AppCores.azulFundo,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: AppCores.branco,
+                                size: 20,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
                 ),
                 SizedBox(height: AppTamanhos.gapPerfil),
@@ -442,7 +471,7 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
   }
 
   Widget _buildBadgeDisposicao(Map<String, dynamic> badge) {
-    final String imageUrl = badge['imagem'] ?? 'https://i.pravatar.cc/300?img=1';
+    final String? imageUrl = badge['imagem'];
 
     return Stack(
       clipBehavior: Clip.none,
@@ -453,11 +482,16 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppCores.outline.withValues(alpha: 0.3),
-            image: DecorationImage(
-              image: NetworkImage(imageUrl),
-              fit: BoxFit.cover,
-            ),
+            image: imageUrl != null && imageUrl.isNotEmpty
+                ? DecorationImage(
+                    image: NetworkImage(imageUrl),
+                    fit: BoxFit.cover,
+                  )
+                : null,
           ),
+          child: imageUrl == null || imageUrl.isEmpty
+              ? const Icon(Icons.shield_outlined, color: AppCores.fontes, size: 32)
+              : null,
         ),
         Positioned(
           top: 0,
@@ -483,8 +517,8 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
   }
 
   Widget _buildBadgeRestante(Map<String, dynamic> badge) {
-    final String imageUrl = badge['imagem'] ?? 'https://i.pravatar.cc/300?img=1';
-    final String nome = badge['nome'] ?? 'Low Code';
+    final String? imageUrl = badge['imagem'];
+    final String nome = badge['nome'] ?? 'Badge';
     final bool canAdd = widget.badgeIdsDisposicao.length < 4;
 
     return SizedBox(
@@ -500,11 +534,16 @@ class _GerirBadgesSeccaoState extends State<GerirBadgesSeccao> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppCores.outline.withValues(alpha: 0.3),
-                  image: DecorationImage(
-                    image: NetworkImage(imageUrl),
-                    fit: BoxFit.cover,
-                  ),
+                  image: imageUrl != null && imageUrl.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(imageUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
+                child: imageUrl == null || imageUrl.isEmpty
+                    ? const Icon(Icons.shield_outlined, color: AppCores.fontes, size: 36)
+                    : null,
               ),
               if (canAdd)
                 Positioned(

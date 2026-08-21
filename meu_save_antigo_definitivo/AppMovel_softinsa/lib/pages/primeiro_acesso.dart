@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../variaveis/tipografia.dart';
 import '../variaveis/variaveis.dart';
 import '../widgets/auth_top_bar.dart';
+import '../widgets/politicas_rgpd_dialog.dart';
 
 class PrimeiroAcessoScreen extends StatefulWidget {
   final String? emailInicial;
@@ -601,7 +602,25 @@ class _PoliticasCheckbox extends StatelessWidget {
                 padding: const EdgeInsets.only(
                   top: AppEspacamentos.loginGapLabelInput,
                 ),
-                child: Text(text, style: AppTipografia.loginLabel),
+                child: GestureDetector(
+                  onTap: () => PoliticasRgpdDialog.mostrar(context),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: text, style: AppTipografia.loginLabel),
+                        const TextSpan(
+                          text: ' (ver)',
+                          style: TextStyle(
+                            color: AppCores.azulFundo,
+                            fontSize: 13.0,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

@@ -316,7 +316,7 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
                             Text(
                               categoria,
                               style: TextStyle(
-                                color: AppCores.fontes.withOpacity(0.5),
+                                color: AppCores.fontes.withValues(alpha: 0.5),
                                 fontSize: 12.0,
                               ),
                             ),
@@ -367,13 +367,13 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
                                   Icon(
                                     UIcons.boldRounded.calendar,
                                     size: 11.0,
-                                    color: AppCores.fontes.withOpacity(0.5),
+                                    color: AppCores.fontes.withValues(alpha: 0.5),
                                   ),
                                   const SizedBox(width: 4.0),
                                   Text(
                                     AppLocalizations.of(context)!.obtido,
                                     style: TextStyle(
-                                      color: AppCores.fontes.withOpacity(0.5),
+                                      color: AppCores.fontes.withValues(alpha: 0.5),
                                       fontSize: 9.0,
                                     ),
                                   ),
@@ -409,13 +409,13 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
                                   Icon(
                                     UIcons.boldRounded.clock,
                                     size: 11.0,
-                                    color: AppCores.fontes.withOpacity(0.5),
+                                    color: AppCores.fontes.withValues(alpha: 0.5),
                                   ),
                                   const SizedBox(width: 4.0),
                                   Text(
                                     AppLocalizations.of(context)!.validade,
                                     style: TextStyle(
-                                      color: AppCores.fontes.withOpacity(0.5),
+                                      color: AppCores.fontes.withValues(alpha: 0.5),
                                       fontSize: 9.0,
                                     ),
                                   ),
@@ -444,7 +444,7 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFFEE2E2),
                         border: Border.all(
-                          color: const Color(0xFFD42A2A).withOpacity(0.3),
+                          color: const Color(0xFFD42A2A).withValues(alpha: 0.3),
                         ),
                         borderRadius: BorderRadius.circular(10.0),
                       ),
@@ -600,7 +600,7 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
                     child: Text(
                       l10n.semBadgesSeccao,
                       style: TextStyle(
-                        color: AppCores.fontes.withOpacity(0.5),
+                        color: AppCores.fontes.withValues(alpha: 0.5),
                         fontSize: 14.0,
                       ),
                     ),

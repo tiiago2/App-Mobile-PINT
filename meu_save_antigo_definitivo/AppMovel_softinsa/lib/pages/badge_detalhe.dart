@@ -128,7 +128,7 @@ class BadgeDetalheScreen extends StatelessWidget {
       inner = Container(
         width: size,
         height: size,
-        color: _avatarColor.withOpacity(0.15),
+        color: _avatarColor.withValues(alpha: 0.15),
         child: Center(
           child: Icon(icon, color: _avatarColor, size: size * 0.42),
         ),
@@ -169,7 +169,7 @@ class BadgeDetalheScreen extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -266,7 +266,7 @@ class BadgeDetalheScreen extends StatelessWidget {
               _descricao,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppCores.fontes.withOpacity(0.75),
+                color: AppCores.fontes.withValues(alpha: 0.75),
                 fontSize: 14,
                 height: 1.45,
               ),
@@ -354,7 +354,7 @@ class BadgeDetalheScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: fundo,
         borderRadius: BorderRadius.circular(AppBorders.padrao),
-        border: Border.all(color: cor.withOpacity(0.35)),
+        border: Border.all(color: cor.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -427,14 +427,14 @@ class BadgeDetalheScreen extends StatelessWidget {
           Icon(
             Icons.info_outline_rounded,
             size: 18,
-            color: AppCores.fontes.withOpacity(0.5),
+            color: AppCores.fontes.withValues(alpha: 0.5),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               l10n.requisitosPlaceholder,
               style: TextStyle(
-                color: AppCores.fontes.withOpacity(0.6),
+                color: AppCores.fontes.withValues(alpha: 0.6),
                 fontSize: 13,
                 height: 1.4,
               ),

@@ -3,10 +3,14 @@ import 'package:uicons/uicons.dart';
 import 'package:go_router/go_router.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
+import '../widgets/politicas_rgpd_dialog.dart';
 import '../widgets/top_bar_actions.dart';
 import '../widgets/galeria/badge_item_com_estado_wrapper.dart';
 import 'badge_detalhe.dart';
 import 'estatisticas.dart';
+import '../controllers/objetivos_controller.dart';
+import '../controllers/badges_controller.dart';
+import '../controllers/estatisticas_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,6 +20,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ObjetivosController.instance.carregar();
+    BadgesController.instance.carregar();
+    EstatisticasController.instance.carregar();
+  }
+
   // ── Saudação Dinâmica ─────────────────────────────────────────────────────
   String _getGreeting(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -27,6 +39,68 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       return l10n?.homeBoaNoite ?? 'Boa Noite!';
     }
+  }
+
+  List<Map<String, dynamic>> _obterObjetivosHome() {
+    final objetivos = ObjetivosController.instance.objetivosAtivos;
+    if (objetivos.isEmpty) return _mockObjetivosHome;
+
+    return objetivos.map((obj) {
+      final titulo = obj['titulo'] ?? obj['nome'] ?? 'Objetivo';
+      final categoria = obj['categoria'] ?? obj['areaNome'] ?? obj['area'] ?? 'Geral';
+      final deadline = obj['deadline'] ?? obj['data'] ?? '—';
+      final dias = obj['diasRestantes'] is int ? obj['diasRestantes'] as int : 5;
+      final prog = (obj['progresso'] as num?)?.toDouble() ?? 0.5;
+
+      return {
+        ...obj,
+        'titulo': titulo,
+        'categoria': categoria,
+        'deadline': deadline,
+        'diasRestantes': dias,
+        'progresso': prog,
+        'avatarColor': obj['avatarColor'] ?? const Color(0xFF82ADE7),
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _obterBadgesEmProgresso() {
+    final badges = BadgesController.instance.badges;
+    if (badges.isEmpty) return _mockBadgesEmProgresso;
+
+    return badges.take(6).map((b) {
+      return {
+        ...b,
+        'titulo': b['titulo'] ?? b['nome_badge'] ?? '',
+        'categoria': b['areaNome'] ?? b['area'] ?? 'Geral',
+        'estado': 'emProgresso',
+        'progresso': (b['progresso'] as int?) ?? 50,
+        'especial': b['especial'] == true || b['especial'] == 1 || b['especial'] == '1',
+        'imagem': b['imagem'],
+        'avatarColor': const Color(0xFF39639C),
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _obterRanking() {
+    final users = EstatisticasController.instance.rankingGeral;
+    if (users.isEmpty) return _mockRanking;
+
+    return users.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final u = entry.value;
+      final pos = idx + 1;
+      return {
+        'id': u['id_utilizador'] ?? pos,
+        'posicao': pos,
+        'nome': u['nome_user'] ?? '',
+        'area': u['nome_area'] ?? 'Geral',
+        'service_line': u['nome_service_line'] ?? 'Digital',
+        'funcao': 'consultor',
+        'pontos': u['pontos_totais'] ?? 0,
+        'img': u['imagem_perfil'],
+      };
+    }).toList();
   }
 
   // ── Mocks da Home ──────────────────────────────────────────────────────────
@@ -269,6 +343,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final double progresso = obj['progresso'] as double;
     final Color avatarColor = obj['avatarColor'] as Color;
 
+    String deadlineFormatado = deadline;
+    if (deadline.length >= 10) {
+      final dt = DateTime.tryParse(deadline);
+      if (dt != null) {
+        deadlineFormatado = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      } else {
+        deadlineFormatado = deadline.substring(0, 10);
+      }
+    }
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -292,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: avatarColor.withOpacity(0.15),
+                color: avatarColor.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -328,7 +412,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               categoria,
                               style: TextStyle(
-                                color: AppCores.fontes.withOpacity(0.5),
+                                color: AppCores.fontes.withValues(alpha: 0.5),
                                 fontSize: 11.0,
                               ),
                               maxLines: 1,
@@ -337,20 +421,21 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8.0),
+                      const SizedBox(width: 6.0),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             UIcons.boldRounded.calendar,
-                            size: 13.0,
-                            color: AppCores.fontes.withOpacity(0.6),
+                            size: 11.0,
+                            color: AppCores.fontes.withValues(alpha: 0.6),
                           ),
-                          const SizedBox(width: 4.0),
+                          const SizedBox(width: 3.0),
                           Text(
-                            '$deadline • $diasRestantes dias',
+                            '$deadlineFormatado • $diasRestantes d',
                             style: TextStyle(
-                              color: AppCores.fontes.withOpacity(0.8),
-                              fontSize: 12.0,
+                              color: AppCores.fontes.withValues(alpha: 0.8),
+                              fontSize: 11.0,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -385,6 +470,8 @@ class _HomeScreenState extends State<HomeScreen> {
     Color borderColor;
     double cardHeight;
     double avatarSize;
+    final imgUrl = user['img'] ?? user['imagem_perfil'] ?? user['foto'];
+    final hasImg = imgUrl is String && (imgUrl.startsWith('http://') || imgUrl.startsWith('https://'));
 
     if (lugar == 1) {
       borderColor = const Color(0xFFF8AA0B); // Ouro
@@ -409,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(color: borderColor, width: 2.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -420,12 +507,15 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           CircleAvatar(
             radius: avatarSize / 2,
-            backgroundColor: AppCores.outline.withOpacity(0.3),
-            child: Icon(
-              UIcons.boldRounded.portrait,
-              color: AppCores.fontes,
-              size: avatarSize * 0.5,
-            ),
+            backgroundColor: AppCores.outline.withValues(alpha: 0.3),
+            backgroundImage: hasImg ? NetworkImage(imgUrl) : null,
+            child: !hasImg
+                ? Icon(
+                    UIcons.boldRounded.portrait,
+                    color: AppCores.fontes,
+                    size: avatarSize * 0.5,
+                  )
+                : null,
           ),
           const SizedBox(height: 8.0),
           Text(
@@ -443,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Text(
             user['area'] as String,
             style: TextStyle(
-              color: AppCores.fontes.withOpacity(0.5),
+              color: AppCores.fontes.withValues(alpha: 0.5),
               fontSize: 10.0,
             ),
             textAlign: TextAlign.center,
@@ -467,6 +557,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Item da Lista de Ranking (Posições 4 a 10) ────────────────────────────
   Widget _buildRankingRowItem(Map<String, dynamic> user) {
     final int pos = user['posicao'] as int;
+    final imgUrl = user['img'] ?? user['imagem_perfil'] ?? user['foto'];
+    final hasImg = imgUrl is String && (imgUrl.startsWith('http://') || imgUrl.startsWith('https://'));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -490,12 +582,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           CircleAvatar(
             radius: 18,
-            backgroundColor: AppCores.outline.withOpacity(0.3),
-            child: Icon(
-              UIcons.boldRounded.portrait,
-              color: AppCores.fontes,
-              size: 18,
-            ),
+            backgroundColor: AppCores.outline.withValues(alpha: 0.3),
+            backgroundImage: hasImg ? NetworkImage(imgUrl) : null,
+            child: !hasImg
+                ? Icon(
+                    UIcons.boldRounded.portrait,
+                    color: AppCores.fontes,
+                    size: 18,
+                  )
+                : null,
           ),
           const SizedBox(width: 12.0),
           Expanded(
@@ -513,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   user['area'] as String,
                   style: TextStyle(
-                    color: AppCores.fontes.withOpacity(0.5),
+                    color: AppCores.fontes.withValues(alpha: 0.5),
                     fontSize: 11.0,
                   ),
                 ),
@@ -537,183 +632,210 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final top1 = _mockRanking.firstWhere((u) => u['posicao'] == 1);
-    final top2 = _mockRanking.firstWhere((u) => u['posicao'] == 2);
-    final top3 = _mockRanking.firstWhere((u) => u['posicao'] == 3);
-    final restoRanking = _mockRanking.where((u) => (u['posicao'] as int) > 3).toList();
 
-    return Scaffold(
-      backgroundColor: AppCores.branco,
-      appBar: AppBar(
-        backgroundColor: AppCores.branco,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: AppTamanhos.colocacao_titulo,
-        title: Text(
-          _getGreeting(context),
-          style: const TextStyle(
-            color: AppCores.fontes,
-            fontSize: AppTamanhos.titulo,
-          ),
-        ),
-        actions: const [
-          TopBarActions(),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── 1. Objetivos Propostos (Rolamento Horizontal) ────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                child: Text(
-                  l10n.objetivosPropostos,
-                  style: const TextStyle(
-                    color: AppCores.fontes,
-                    fontSize: AppTamanhos.titulo,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12.0),
-              SizedBox(
-                height: 96,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                  itemCount: _mockObjetivosHome.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12.0),
-                  itemBuilder: (context, index) {
-                    return _buildHomeObjectiveCard(_mockObjetivosHome[index]);
-                  },
-                ),
-              ),
-              const SizedBox(height: 28.0),
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        ObjetivosController.instance,
+        BadgesController.instance,
+        EstatisticasController.instance,
+      ]),
+      builder: (context, _) {
+        final rankingList = _obterRanking();
+        final top1 = rankingList.isNotEmpty ? rankingList[0] : _mockRanking[0];
+        final top2 = rankingList.length > 1 ? rankingList[1] : (rankingList.isNotEmpty ? rankingList[0] : _mockRanking[1]);
+        final top3 = rankingList.length > 2 ? rankingList[2] : (rankingList.isNotEmpty ? rankingList[0] : _mockRanking[2]);
+        final restoRanking = rankingList.length > 3 ? rankingList.sublist(3) : _mockRanking.sublist(3);
 
-              // ── 2. Badges em Progresso (Rolamento Horizontal) ─────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l10n.badgesEmProgresso,
-                      style: const TextStyle(
-                        color: AppCores.fontes,
-                        fontSize: AppTamanhos.titulo,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        UIcons.boldRounded.expand,
-                        color: AppCores.fontes,
-                        size: 20.0,
-                      ),
-                      onPressed: () {
-                        context.go('/galeria?filtro=emProgresso');
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12.0),
-              SizedBox(
-                height: 135,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                  itemCount: _mockBadgesEmProgresso.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 16.0),
-                  itemBuilder: (context, index) {
-                    return BadgeItemComEstadoWrapper(
-                      badge: _mockBadgesEmProgresso[index],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 28.0),
+        final objetivosList = _obterObjetivosHome();
+        final badgesList = _obterBadgesEmProgresso();
 
-              // ── 3. Classificação Geral (Leaderboard / Ranking) ─────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l10n.classificacaoGeral,
-                      style: const TextStyle(
-                        color: AppCores.fontes,
-                        fontSize: AppTamanhos.titulo,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        UIcons.boldRounded.expand,
-                        color: AppCores.fontes,
-                        size: 20.0,
-                      ),
-                      onPressed: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => ClassificacaoModal(dados: _mockRanking),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+        return Scaffold(
+          backgroundColor: AppCores.branco,
+          appBar: AppBar(
+            backgroundColor: AppCores.branco,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: false,
+            titleSpacing: AppTamanhos.colocacao_titulo,
+            title: Text(
+              _getGreeting(context),
+              style: const TextStyle(
+                color: AppCores.fontes,
+                fontSize: AppTamanhos.titulo,
               ),
-              const SizedBox(height: 16.0),
-              // Pódio (Top 3)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(child: _buildPodiumCard(top2, 2)),
-                    const SizedBox(width: 8.0),
-                    Expanded(child: _buildPodiumCard(top1, 1)),
-                    const SizedBox(width: 8.0),
-                    Expanded(child: _buildPodiumCard(top3, 3)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20.0),
-              // Posições 4 a 10
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: restoRanking.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10.0),
-                  itemBuilder: (context, index) {
-                    return _buildRankingRowItem(restoRanking[index]);
-                  },
-                ),
-              ),
-              const SizedBox(height: 32.0),
-              // Footer políticas RGPD
-              Center(
-                child: Text(
-                  'Políticas RGPD',
-                  style: TextStyle(
-                    color: AppCores.fontes.withOpacity(0.5),
-                    fontSize: 12.0,
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16.0),
+            ),
+            actions: const [
+              TopBarActions(),
             ],
           ),
-        ),
-      ),
+          body: RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([
+                ObjetivosController.instance.carregar(),
+                BadgesController.instance.carregar(force: true),
+                EstatisticasController.instance.carregar(),
+              ]);
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── 1. Objetivos Propostos (Rolamento Horizontal) ────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                      child: Text(
+                        l10n.objetivosPropostos,
+                        style: const TextStyle(
+                          color: AppCores.fontes,
+                          fontSize: AppTamanhos.titulo,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12.0),
+                    SizedBox(
+                      height: 96,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                        itemCount: objetivosList.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12.0),
+                        itemBuilder: (context, index) {
+                          return _buildHomeObjectiveCard(objetivosList[index]);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 28.0),
+
+                    // ── 2. Badges em Progresso (Rolamento Horizontal) ─────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            l10n.badgesEmProgresso,
+                            style: const TextStyle(
+                              color: AppCores.fontes,
+                              fontSize: AppTamanhos.titulo,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              UIcons.boldRounded.expand,
+                              color: AppCores.fontes,
+                              size: 20.0,
+                            ),
+                            onPressed: () {
+                              context.go('/galeria?filtro=emProgresso');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12.0),
+                    SizedBox(
+                      height: 135,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                        itemCount: badgesList.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 16.0),
+                        itemBuilder: (context, index) {
+                          return BadgeItemComEstadoWrapper(
+                            badge: badgesList[index],
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 28.0),
+
+                    // ── 3. Classificação Geral (Leaderboard / Ranking) ─────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            l10n.classificacaoGeral,
+                            style: const TextStyle(
+                              color: AppCores.fontes,
+                              fontSize: AppTamanhos.titulo,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              UIcons.boldRounded.expand,
+                              color: AppCores.fontes,
+                              size: 20.0,
+                            ),
+                            onPressed: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => ClassificacaoModal(dados: rankingList),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+                    // Pódio (Top 3)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(child: _buildPodiumCard(top2, 2)),
+                          const SizedBox(width: 8.0),
+                          Expanded(child: _buildPodiumCard(top1, 1)),
+                          const SizedBox(width: 8.0),
+                          Expanded(child: _buildPodiumCard(top3, 3)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20.0),
+                    // Posições 4 a 10
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTamanhos.margemEcra),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: restoRanking.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10.0),
+                        itemBuilder: (context, index) {
+                          return _buildRankingRowItem(restoRanking[index]);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 32.0),
+                    // Footer políticas RGPD
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => PoliticasRgpdDialog.mostrar(context),
+                        child: Text(
+                          'Políticas RGPD',
+                          style: TextStyle(
+                            color: AppCores.fontes.withValues(alpha: 0.5),
+                            fontSize: 12.0,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

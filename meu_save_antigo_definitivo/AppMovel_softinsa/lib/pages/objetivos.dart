@@ -113,7 +113,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: avatarColor.withOpacity(0.15),
+                  color: avatarColor.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -374,7 +374,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
                                       : _formatDateDisplay(_selectedDeadlineForNewObjective!),
                                   style: TextStyle(
                                     color: _selectedDeadlineForNewObjective == null
-                                        ? AppCores.fontes.withOpacity(0.6)
+                                        ? AppCores.fontes.withValues(alpha: 0.6)
                                         : AppCores.fontes,
                                     fontSize: 14.0,
                                   ),
@@ -475,7 +475,7 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
                               ? (l10n?.nenhumObjetivoAtivo ?? 'Nenhum objetivo ativo.')
                               : (l10n?.nenhumObjetivoExpirado ?? 'Nenhum objetivo expirado.'),
                           style: TextStyle(
-                            color: AppCores.fontes.withOpacity(0.6),
+                            color: AppCores.fontes.withValues(alpha: 0.6),
                             fontSize: 14.0,
                           ),
                         ),

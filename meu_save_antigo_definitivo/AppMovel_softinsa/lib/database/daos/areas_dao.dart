@@ -16,7 +16,7 @@ class AreasDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.areasTable,
-      where: 'id_area = ? AND deleted_area IS NULL',
+      where: 'id_area = ? AND (deleted_area = 0 OR deleted_area IS NULL)',
       whereArgs: [areaId],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class AreasDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.areasTable,
-      where: 'deleted_area IS NULL',
+      where: 'deleted_area = 0 OR deleted_area IS NULL',
     );
   }
 

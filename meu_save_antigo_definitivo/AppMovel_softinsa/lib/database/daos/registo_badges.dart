@@ -17,7 +17,7 @@ class RegistoBadgesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.registoBadgesTable,
-      where: 'id_utilizador = ? AND id_registo = ? AND deleted_registo IS NULL',
+      where: 'id_utilizador = ? AND id_registo = ? AND (deleted_registo = 0 OR deleted_registo IS NULL)',
       whereArgs: [userId, registoId],
       limit: 1,
     );
@@ -33,7 +33,7 @@ class RegistoBadgesDao {
       SELECT r.*, b.badge_json, b.nome_badge, b.imagem, b.validade
       FROM ${DatabaseSchema.registoBadgesTable} r
       JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = r.id_badge
-      WHERE r.id_utilizador = ? AND r.deleted_registo IS NULL
+      WHERE r.id_utilizador = ? AND (r.deleted_registo = 0 OR r.deleted_registo IS NULL)
       ORDER BY r.data_obtencao DESC
     ''',
       [userId],

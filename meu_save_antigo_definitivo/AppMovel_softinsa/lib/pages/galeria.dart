@@ -6,6 +6,10 @@ import '../widgets/galeria/aba_sugeridos.dart';
 import '../widgets/searchbar_filter.dart';
 import '../idiomas/app_localizations.dart';
 
+import '../controllers/badges_controller.dart';
+import '../controllers/auth_controller.dart';
+import '../database/daos/registo_badges.dart';
+
 class GaleriaScreen extends StatefulWidget {
   final String filtroInicial;
   const GaleriaScreen({super.key, this.filtroInicial = 'todos'});
@@ -20,10 +24,72 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
   late String _filtroSelecionado;
   FilterOptions _filterOptions = const FilterOptions();
 
+  Set<int> _conquistadosIds = {};
+  Set<int> _expiradosIds = {};
+
   @override
   void initState() {
     super.initState();
     _filtroSelecionado = widget.filtroInicial;
+    BadgesController.instance.carregar();
+    _carregarRegistos();
+  }
+
+  Future<void> _carregarRegistos() async {
+    final userId = AuthController.instance.currentUser?['id'] as int? ??
+        AuthController.instance.currentUser?['id_utilizador'] as int?;
+    if (userId != null) {
+      try {
+        final registos = await RegistoBadgesDao.instance.getRegistosDoUtilizador(userId);
+        final conqu = <int>{};
+        final exp = <int>{};
+        for (final r in registos) {
+          final bId = r['id_badge'] as int?;
+          if (bId != null) {
+            if (r['expirado'] == 1 || r['expirado'] == true) {
+              exp.add(bId);
+            } else {
+              conqu.add(bId);
+            }
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _conquistadosIds = conqu;
+            _expiradosIds = exp;
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  List<Map<String, dynamic>> _obterBadges() {
+    final rawBadges = BadgesController.instance.badges;
+    if (rawBadges.isEmpty) return _mockBadges;
+
+    return rawBadges.map((b) {
+      final bId = b['id'] as int? ?? b['id_badge'] as int? ?? 0;
+      String estado = 'disponivel';
+      if (_conquistadosIds.contains(bId)) {
+        estado = 'conquistados';
+      } else if (_expiradosIds.contains(bId)) {
+        estado = 'expirados';
+      }
+
+      return {
+        ...b,
+        'id': bId,
+        'titulo': b['titulo'] ?? b['nome_badge'] ?? '',
+        'imagem': b['imagem'],
+        'especial': b['especial'] == true || b['especial'] == 1 || b['especial'] == '1',
+        'minha_area': b['minhaArea'] == true || b['minha_area'] == true,
+        'areaNome': b['areaNome'] ?? b['area'] ?? '',
+        'nivelNome': b['nivelNome'] ?? b['nivel'] ?? '',
+        'pontos': b['pontos'] ?? b['pontos_badge'] ?? 0,
+        'estado': b['estado'] ?? estado,
+        'progresso': b['progresso'] ?? 0,
+      };
+    }).toList();
   }
 
   @override
@@ -282,28 +348,34 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
         ),
         actions: const [TopBarActions()],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {},
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(AppTamanhos.margemEcra),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                BarraDeSelecao(
-                  onSelectionChanged: (int index) {
-                    setState(() {
-                      _abaSelecionada = index;
-                    });
-                  },
-                ),
-                const SizedBox(height: AppTamanhos.gapBadgesPessoais),
-                _abaSelecionada == 1
-                    ? Builder(
-                        builder: (context) {
-                          // 1. Get searched list of badges
-                          final badges = _filtrarBadges(_mockBadges);
+      body: ListenableBuilder(
+        listenable: BadgesController.instance,
+        builder: (context, _) {
+          return RefreshIndicator(
+            onRefresh: () async {
+              await BadgesController.instance.carregar(force: true);
+              await _carregarRegistos();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTamanhos.margemEcra),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BarraDeSelecao(
+                      onSelectionChanged: (int index) {
+                        setState(() {
+                          _abaSelecionada = index;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppTamanhos.gapBadgesPessoais),
+                    _abaSelecionada == 1
+                        ? Builder(
+                            builder: (context) {
+                              // 1. Get searched list of badges
+                              final badges = _filtrarBadges(_obterBadges());
 
                           // 2. Compute dynamic counts based on search query
                           final int countTodos = badges.length;
@@ -381,8 +453,10 @@ class _GaleriaScreenState extends State<GaleriaScreen> {
             ),
           ),
         ),
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 }
 

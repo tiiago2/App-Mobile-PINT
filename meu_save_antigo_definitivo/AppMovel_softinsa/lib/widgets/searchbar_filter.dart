@@ -464,7 +464,7 @@ class SearchBarFilter extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: hintText ?? defaultHint,
                       hintStyle: TextStyle(
-                        color: AppCores.fontes.withOpacity(0.5),
+                        color: AppCores.fontes.withValues(alpha: 0.5),
                         fontSize: 16,
                       ),
                       border: InputBorder.none,

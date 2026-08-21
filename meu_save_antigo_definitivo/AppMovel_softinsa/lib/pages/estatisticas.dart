@@ -5,6 +5,10 @@ import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 import '../widgets/top_bar_actions.dart';
 
+import '../controllers/estatisticas_controller.dart';
+import '../controllers/objetivos_controller.dart';
+import '../controllers/badges_controller.dart';
+
 class EstatisticasScreen extends StatefulWidget {
   const EstatisticasScreen({super.key});
 
@@ -18,6 +22,34 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
   String _distribuicaoAno = '2024';
 
   final List<String> _anosDistribuicao = const ['2022', '2023', '2024', '2025'];
+
+  @override
+  void initState() {
+    super.initState();
+    EstatisticasController.instance.carregar();
+    ObjetivosController.instance.carregar();
+    BadgesController.instance.carregar();
+  }
+
+  List<Map<String, dynamic>> _obterClassificacao() {
+    final users = EstatisticasController.instance.rankingGeral;
+    if (users.isEmpty) return _mockClassificacao;
+    return users.map((u) {
+      final pontos = (u['pontos_totais'] as num?)?.toInt() ?? 0;
+      return {
+        'id': u['id_utilizador'] ?? 0,
+        'nome': u['nome_user'] ?? '',
+        'area': u['nome_area'] ?? 'Geral',
+        'service_line': u['nome_service_line'] ?? 'Consultoria',
+        'funcao': 'consultor',
+        'pontos_semana': (pontos * 0.1).round(),
+        'pontos_mes': (pontos * 0.3).round(),
+        'pontos_ano': (pontos * 0.8).round(),
+        'pontos_sempre': pontos,
+        'img': u['imagem_perfil'],
+      };
+    }).toList();
+  }
 
   // ── MOCKS ───────────────────────────────────────────────────────────────
   final List<Map<String, dynamic>> _mockClassificacao = const [
@@ -136,75 +168,90 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppCores.branco,
-      appBar: AppBar(
-        backgroundColor: AppCores.branco,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: AppTamanhos.colocacao_titulo,
-        title: Text(
-          AppLocalizations.of(context)?.estatisticasTitulo ?? 'Estatísticas',
-          style: const TextStyle(
-            color: AppCores.fontes,
-            fontSize: AppTamanhos.titulo,
-          ),
-        ),
-        actions: const [
-          TopBarActions(showDocumentIcon: true),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildKpiGrid(),
-              const SizedBox(height: 24),
-              _buildDistributionCard(),
-              const SizedBox(height: 24),
-              _buildClassificacaoGeralCard(),
-              const SizedBox(height: 24),
-              _buildBadgesByLevelCard(),
-              const SizedBox(height: 24),
-              _buildBadgeEvolutionCard(),
-              const SizedBox(height: 24),
-              _buildPointsEvolutionCard(),
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        EstatisticasController.instance,
+        ObjetivosController.instance,
+        BadgesController.instance,
+      ]),
+      builder: (context, _) {
+        return Scaffold(
+          backgroundColor: AppCores.branco,
+          appBar: AppBar(
+            backgroundColor: AppCores.branco,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: false,
+            titleSpacing: AppTamanhos.colocacao_titulo,
+            title: Text(
+              AppLocalizations.of(context)?.estatisticasTitulo ?? 'Estatísticas',
+              style: const TextStyle(
+                color: AppCores.fontes,
+                fontSize: AppTamanhos.titulo,
+              ),
+            ),
+            actions: const [
+              TopBarActions(showDocumentIcon: true),
             ],
           ),
-        ),
-      ),
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildKpiGrid(),
+                  const SizedBox(height: 24),
+                  _buildDistributionCard(),
+                  const SizedBox(height: 24),
+                  _buildClassificacaoGeralCard(),
+                  const SizedBox(height: 24),
+                  _buildBadgesByLevelCard(),
+                  const SizedBox(height: 24),
+                  _buildBadgeEvolutionCard(),
+                  const SizedBox(height: 24),
+                  _buildPointsEvolutionCard(),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   // ── KPI ─────────────────────────────────────────────────────────────────
   Widget _buildKpiGrid() {
     final l10n = AppLocalizations.of(context);
+    final estatisticasController = EstatisticasController.instance;
+    final objetivosController = ObjetivosController.instance;
+    final totalBadges = estatisticasController.totalBadgesConquistados;
+    final posicao = estatisticasController.posicaoGeral;
+    final objetivosAtivos = objetivosController.objetivosAtivos.length;
+
     final kpiCards = [
       {
         'icon': UIcons.boldRounded.badge,
         'iconColor': AppCores.azulFundo,
-        'value': '100',
+        'value': '$totalBadges',
         'label': l10n?.totalBadgesKpi ?? 'Total de Badges',
       },
       {
         'icon': UIcons.boldRounded.trophy,
         'iconColor': const Color(0xFF5EA500),
-        'value': l10n?.lugarGeralValorKpi ?? '4.º',
+        'value': '$posicao.º',
         'label': l10n?.lugarGeralKpi ?? 'Lugar geral',
       },
       {
         'icon': UIcons.boldRounded.chart_histogram,
         'iconColor': const Color(0xFFE17100),
-        'value': '72%',
-        'label': l10n?.mediaProgressoKpi ?? 'Média de Progresso',
+        'value': '${estatisticasController.totalPontos} pts',
+        'label': l10n?.mediaProgressoKpi ?? 'Total de Pontos',
       },
       {
         'icon': UIcons.boldRounded.target,
         'iconColor': const Color(0xFFAE012F),
-        'value': '28',
+        'value': '$objetivosAtivos',
         'label': l10n?.objetivosAtivosKpi ?? 'Objetivos Ativos',
       },
     ];
@@ -504,8 +551,8 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
   }
 
   List<Map<String, dynamic>> _getListaOrdenadaPreview() {
-    final copia = List<Map<String, dynamic>>.from(_mockClassificacao);
-    copia.sort((a, b) => (b['pontos_sempre'] as int).compareTo(a['pontos_sempre'] as int));
+    final copia = List<Map<String, dynamic>>.from(_obterClassificacao());
+    copia.sort((a, b) => ((b['pontos_sempre'] as num?)?.toInt() ?? 0).compareTo((a['pontos_sempre'] as num?)?.toInt() ?? 0));
 
     return copia.asMap().entries.map((entry) {
       final idx = entry.key;
@@ -514,7 +561,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       return {
         ...item,
         'pos': pos,
-        'pontos': (item['pontos_sempre'] as int).toString(),
+        'pontos': (item['pontos_sempre'] ?? 0).toString(),
         'cor': pos == 1
             ? const Color(0xFFFFD700)
             : pos == 2
@@ -631,7 +678,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ClassificacaoModal(dados: _mockClassificacao),
+      builder: (_) => ClassificacaoModal(dados: _obterClassificacao()),
     );
   }
 

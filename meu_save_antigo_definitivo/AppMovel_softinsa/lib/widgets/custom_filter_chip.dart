@@ -44,8 +44,8 @@ class CustomFilterChip extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppCores.branco.withOpacity(0.2)
-                    : AppCores.outline.withOpacity(0.3),
+                    ? AppCores.branco.withValues(alpha: 0.2)
+                    : AppCores.outline.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(AppBorders.padrao),
               ),
               child: Text(

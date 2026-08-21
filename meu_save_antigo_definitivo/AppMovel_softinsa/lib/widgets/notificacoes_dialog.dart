@@ -178,7 +178,7 @@ class _NotificacoesDialogState extends State<NotificacoesDialog> {
               border: Border.all(color: AppCores.outline, width: 1.6),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 10.0,
                   offset: const Offset(0, 4),
                 ),

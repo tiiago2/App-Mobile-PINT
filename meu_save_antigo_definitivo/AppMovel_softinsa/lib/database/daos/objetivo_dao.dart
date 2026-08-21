@@ -18,7 +18,7 @@ class ObjetivosDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.objetivosTable,
-      where: 'id_objetivo_local = ? AND deleted_objetivo IS NULL',
+      where: 'id_objetivo_local = ? AND (deleted_objetivo = 0 OR deleted_objetivo IS NULL)',
       whereArgs: [localId],
       limit: 1,
     );
@@ -323,7 +323,7 @@ class ObjetivosDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.objetivosTable,
-      where: 'id_utilizador = ? AND deleted_objetivo IS NULL',
+      where: 'id_utilizador = ? AND (deleted_objetivo = 0 OR deleted_objetivo IS NULL)',
       whereArgs: [userId],
       orderBy: 'data_final ASC',
     );

@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
+import '../database/daos/assinaturas_dao.dart';
 import '../database/daos/badges_assinatura_dao.dart';
 import '../database/daos/learning_paths_dao.dart';
 import '../database/daos/perfil_dao.dart';
+import '../database/daos/registo_badges.dart';
+import '../database/sync_helpers.dart';
 import '../services/api_service.dart';
 import 'auth_controller.dart';
 
@@ -21,18 +24,21 @@ class PerfilController extends ChangeNotifier {
 
   final PerfilDao _perfilDao = PerfilDao.instance;
   final BadgesAssinaturaDao _assinaturaDao = BadgesAssinaturaDao.instance;
+  final AssinaturasDao _assinaturasDao = AssinaturasDao.instance;
   final LearningPathsDao _learningPathsDao = LearningPathsDao.instance;
   final ApiService _apiService = ApiService();
 
   PerfilStatus _status = PerfilStatus.idle;
   Map<String, dynamic>? _perfil;
   List<Map<String, dynamic>> _badgesAssinatura = [];
+  List<Map<String, dynamic>> _badgesConquistados = [];
   Map<String, dynamic>? _learningPathInfo;
   String? _errorMessage;
 
   PerfilStatus get status => _status;
   Map<String, dynamic>? get perfil => _perfil;
   List<Map<String, dynamic>> get badgesAssinatura => _badgesAssinatura;
+  List<Map<String, dynamic>> get badgesConquistados => _badgesConquistados;
   Map<String, dynamic>? get learningPathInfo => _learningPathInfo;
   String? get errorMessage => _errorMessage;
 
@@ -43,6 +49,7 @@ class PerfilController extends ChangeNotifier {
     if (userId == null) {
       _perfil = null;
       _badgesAssinatura = [];
+      _badgesConquistados = [];
       _learningPathInfo = null;
       _status = PerfilStatus.ready;
       notifyListeners();
@@ -59,14 +66,23 @@ class PerfilController extends ChangeNotifier {
       _perfil ??= AuthController.instance.currentUser;
 
       // 2. Carregar Badges de Assinatura
-      final idPerfil = _perfil?['id_perfil_local'] as int? ?? userId;
-      _badgesAssinatura = await _assinaturaDao.getBadgesDaAssinatura(idPerfil);
+      final assinatura = await _assinaturasDao.getAssinaturaPorProprietario(userId);
+      final idAssinaturaLocal = intOrNull(assinatura?['id_assinatura_local'] ?? assinatura?['id_assinatura']);
+      if (idAssinaturaLocal != null) {
+        _badgesAssinatura = await _assinaturaDao.getBadgesDaAssinatura(idAssinaturaLocal);
+      } else {
+        _badgesAssinatura = await _assinaturaDao.getBadgesDaAssinatura(userId);
+      }
 
       // 3. Carregar Learning Path do utilizador
-      final lpId = _perfil?['id_learning_path'] as int?;
+      final lpMap = _perfil?['learning_path'] ?? _perfil?['learningPath'];
+      final lpId = intOrNull(_perfil?['id_learning_path'] ?? (lpMap is Map ? lpMap['id_learning_path'] ?? lpMap['id'] : null));
       if (lpId != null) {
         _learningPathInfo = await _learningPathsDao.getLearningPath(lpId);
       }
+
+      // 4. Carregar Badges Conquistados do Utilizador (Registo de Badges)
+      _badgesConquistados = await RegistoBadgesDao.instance.getRegistosDoUtilizador(userId);
 
       _status = PerfilStatus.ready;
       notifyListeners();

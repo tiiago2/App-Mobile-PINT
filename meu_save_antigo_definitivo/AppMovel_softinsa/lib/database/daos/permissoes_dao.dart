@@ -16,7 +16,7 @@ class PermissoesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.permissoesTable,
-      where: 'user_id = ? AND permission_key = ? AND deleted_at IS NULL',
+      where: 'user_id = ? AND permission_key = ? AND (deleted_at = 0 OR deleted_at IS NULL)',
       whereArgs: [userId, permissionKey],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class PermissoesDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.permissoesTable,
-      where: 'user_id = ? AND deleted_at IS NULL',
+      where: 'user_id = ? AND (deleted_at = 0 OR deleted_at IS NULL)',
       whereArgs: [userId],
     );
   }

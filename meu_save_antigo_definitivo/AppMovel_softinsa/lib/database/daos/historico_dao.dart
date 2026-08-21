@@ -96,7 +96,7 @@ class HistoricoDao {
       SELECT h.*
       FROM ${DatabaseSchema.historicoTable} h
       JOIN ${DatabaseSchema.submissoesTable} s ON s.id_submissao = h.id_submissao
-      WHERE s.id_utilizador = ? AND s.deleted_submissao IS NULL
+      WHERE s.id_utilizador = ? AND (s.deleted_submissao = 0 OR s.deleted_submissao IS NULL)
       ORDER BY h.data_avaliacao DESC
     ''',
       [userId],

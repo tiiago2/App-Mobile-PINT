@@ -16,7 +16,7 @@ class ServiceLinesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.serviceLinesTable,
-      where: 'id_service_line = ? AND deleted_service IS NULL',
+      where: 'id_service_line = ? AND (deleted_service = 0 OR deleted_service IS NULL)',
       whereArgs: [serviceLineId],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class ServiceLinesDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.serviceLinesTable,
-      where: 'deleted_service IS NULL',
+      where: 'deleted_service = 0 OR deleted_service IS NULL',
     );
   }
 

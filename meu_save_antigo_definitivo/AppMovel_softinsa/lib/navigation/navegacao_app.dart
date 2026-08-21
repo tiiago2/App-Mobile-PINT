@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uicons/uicons.dart';
-import 'package:country_flags/country_flags.dart';
-
-// --- OS TEUS IMPORTS LOCAIS ---
-// (Atenção: Verifica se os caminhos destas pastas batem certo com o teu projeto)
 import '../variaveis/variaveis.dart';
-import '../variaveis/variaveis.dart';
-import '../widgets/top_bar_actions.dart'; // Importa as ações reutilizáveis da top bar
 
 class AppNavegacao extends StatefulWidget {
   final Widget ecraAtual; // O recheio (ecrã) que as rotas vão injetar aqui

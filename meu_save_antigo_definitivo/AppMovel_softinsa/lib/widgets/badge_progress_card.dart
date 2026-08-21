@@ -63,7 +63,7 @@ class BadgeProgressCard extends StatelessWidget {
         height: 82,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: avatarColor.withOpacity(0.15),
+          color: avatarColor.withValues(alpha: 0.15),
           border: especial
               ? Border.all(color: const Color(0xFFF8AA0B), width: 2.0)
               : null,
@@ -129,7 +129,7 @@ class BadgeProgressCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 4.0,
                     offset: const Offset(0, 2),
                   ),
@@ -247,7 +247,7 @@ class BadgeProgressCard extends StatelessWidget {
                               categoria,
                               style: TextStyle(
                                 fontSize: 13.0,
-                                color: AppCores.fontes.withOpacity(0.5),
+                                color: AppCores.fontes.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -276,7 +276,7 @@ class BadgeProgressCard extends StatelessWidget {
                     '$progressoPercent% completo',
                     style: TextStyle(
                       fontSize: 11.0,
-                      color: AppCores.fontes.withOpacity(0.5),
+                      color: AppCores.fontes.withValues(alpha: 0.5),
                       fontWeight: FontWeight.w500,
                     ),
                   ),

@@ -17,7 +17,7 @@ class RequisitosDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.requisitosTable,
-      where: 'id_requisito = ? AND deleted_requisito IS NULL',
+      where: 'id_requisito = ? AND (deleted_requisito = 0 OR deleted_requisito IS NULL)',
       whereArgs: [requisitoId],
       limit: 1,
     );
@@ -30,7 +30,7 @@ class RequisitosDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.requisitosTable,
-      where: 'deleted_requisito IS NULL',
+      where: 'deleted_requisito = 0 OR deleted_requisito IS NULL',
     );
   }
 

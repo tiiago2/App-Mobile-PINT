@@ -17,7 +17,7 @@ class DocumentosSubmissaoDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.documentosSubmissaoTable,
-      where: 'id_ficheiro_local = ? AND deleted_file IS NULL',
+      where: 'id_ficheiro_local = ? AND (deleted_file = 0 OR deleted_file IS NULL)',
       whereArgs: [localId],
       limit: 1,
     );
@@ -30,7 +30,7 @@ class DocumentosSubmissaoDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.documentosSubmissaoTable,
-      where: 'id_submissao_local = ? AND deleted_file IS NULL',
+      where: 'id_submissao_local = ? AND (deleted_file = 0 OR deleted_file IS NULL)',
       whereArgs: [submissaoLocalId],
     );
   }

@@ -16,7 +16,7 @@ class SubmissaoRequisitosDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       DatabaseSchema.submissaoRequisitosTable,
-      where: 'id_submissao_local = ? AND id_requisito = ? AND deleted_at IS NULL',
+      where: 'id_submissao_local = ? AND id_requisito = ? AND (deleted_at = 0 OR deleted_at IS NULL)',
       whereArgs: [submissaoLocalId, requisitoId],
       limit: 1,
     );
@@ -29,7 +29,7 @@ class SubmissaoRequisitosDao {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.submissaoRequisitosTable,
-      where: 'id_submissao_local = ? AND deleted_at IS NULL',
+      where: 'id_submissao_local = ? AND (deleted_at = 0 OR deleted_at IS NULL)',
       whereArgs: [submissaoLocalId],
     );
   }
