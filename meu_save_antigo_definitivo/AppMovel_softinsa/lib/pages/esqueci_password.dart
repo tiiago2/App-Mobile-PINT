@@ -86,6 +86,8 @@ class _EsqueciPasswordScreenState extends State<EsqueciPasswordScreen> {
 
     if (password.isEmpty) {
       passwordErro = l10n.authCampoObrigatorio;
+    } else if (password.length < 6) {
+      passwordErro = 'A password deve ter pelo menos 6 caracteres.';
     }
 
     if (confirmarPassword.isEmpty) {

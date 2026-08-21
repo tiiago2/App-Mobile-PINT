@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../variaveis/tipografia.dart';
 import '../variaveis/variaveis.dart';
 import '../widgets/auth_top_bar.dart';
+import '../widgets/politicas_rgpd_dialog.dart';
 
 class PrimeiroAcessoScreen extends StatefulWidget {
   final String? emailInicial;
@@ -99,6 +100,8 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
 
     if (password.isEmpty) {
       passwordErro = l10n.authCampoObrigatorio;
+    } else if (password.length < 6) {
+      passwordErro = 'A password deve ter pelo menos 6 caracteres.';
     }
 
     if (confirmarPassword.isEmpty) {
@@ -601,7 +604,15 @@ class _PoliticasCheckbox extends StatelessWidget {
                 padding: const EdgeInsets.only(
                   top: AppEspacamentos.loginGapLabelInput,
                 ),
-                child: Text(text, style: AppTipografia.loginLabel),
+                child: GestureDetector(
+                  onTap: () => PoliticasRgpdDialog.mostrar(context),
+                  child: Text(
+                    '$text (Ler políticas)',
+                    style: AppTipografia.loginLabel.copyWith(
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 import '../widgets/top_bar_actions.dart';
+import '../widgets/politicas_rgpd_dialog.dart';
 import '../widgets/galeria/badge_item_com_estado_wrapper.dart';
 import 'badge_detalhe.dart';
 import 'estatisticas.dart';
@@ -977,12 +978,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 32.0),
                 // Footer políticas RGPD
                 Center(
-                  child: Text(
-                    'Políticas RGPD',
-                    style: TextStyle(
-                      color: AppCores.fontes.withOpacity(0.5),
-                      fontSize: 12.0,
-                      decoration: TextDecoration.underline,
+                  child: GestureDetector(
+                    onTap: () => PoliticasRgpdDialog.mostrar(context),
+                    child: Text(
+                      'Políticas RGPD',
+                      style: TextStyle(
+                        color: AppCores.fontes.withValues(alpha: 0.5),
+                        fontSize: 12.0,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                 ),

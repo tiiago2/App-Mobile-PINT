@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import '../local/secure_storage.dart';
 import '../../services/session_storage.dart';
 import 'package:flutter/material.dart';
@@ -565,5 +566,36 @@ class ApiClient {
       debugPrint('❌ [ApiClient] Erro ao atualizar last login no servidor: $e');
       return false;
     }
+  }
+
+  /// Descarrega um ficheiro de forma segura com autenticação Bearer.
+  /// Guarda o ficheiro no caminho local especificado e retorna o caminho do ficheiro guardado.
+  Future<String?> downloadFile(String fileUrl, {String? customFileName}) async {
+    try {
+      final token = await SecureStorage.getToken();
+      final tempDir = await getTemporaryDirectory();
+      final cleanUrl = fileUrl.trim();
+      final fileName = customFileName ?? cleanUrl.split('/').last.split('?').first;
+      final savePath = '${tempDir.path}/$fileName';
+
+      debugPrint('📥 [ApiClient] A descarregar ficheiro: $cleanUrl -> $savePath');
+
+      final response = await _dio.download(
+        cleanUrl,
+        savePath,
+        options: Options(
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null,
+          receiveTimeout: const Duration(seconds: 45),
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('✅ [ApiClient] Ficheiro descarregado com sucesso: $savePath');
+        return savePath;
+      }
+    } catch (e) {
+      debugPrint('❌ [ApiClient] Erro ao descarregar ficheiro: $e');
+    }
+    return null;
   }
 }

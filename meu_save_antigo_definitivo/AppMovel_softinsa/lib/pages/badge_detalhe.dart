@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:file_picker/file_picker.dart';
@@ -364,9 +365,26 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
 
   Future<void> _adicionarEvidencia(int requisitoId) async {
     try {
+      final user = AuthController.instance.currentUser;
+      final userId = int.tryParse(user?['id']?.toString() ?? '') ??
+          int.tryParse(user?['user_id']?.toString() ?? '') ??
+          int.tryParse(user?['id_utilizador']?.toString() ?? '');
+
+      if (userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Inicie sessão para adicionar evidências.'),
+            ),
+          );
+        }
+        return;
+      }
+
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'docx'],
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
       );
 
       if (result == null || result.files.single.path == null) {
@@ -376,12 +394,38 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
 
       final filePath = result.files.single.path!;
       final fileName = result.files.single.name;
-      debugPrint('📁 [Evidência] Ficheiro selecionado: $fileName ($filePath)');
+      final file = File(filePath);
 
-      final userId = int.tryParse(AuthController.instance.currentUser?['id']?.toString() ?? '') ??
-          int.tryParse(AuthController.instance.currentUser?['user_id']?.toString() ?? '') ??
-          int.tryParse(AuthController.instance.currentUser?['id_utilizador']?.toString() ?? '') ??
-          1;
+      // Validação de tamanho (máximo 5 MB)
+      final fileSize = await file.length();
+      const maxSizeBytes = 5 * 1024 * 1024; // 5 MB
+      if (fileSize > maxSizeBytes) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('O ficheiro selecionado excede o limite máximo permitido de 5 MB.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Validação de formato/extensão
+      final ext = fileName.split('.').last.toLowerCase();
+      if (!['pdf', 'png', 'jpg', 'jpeg'].contains(ext)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Formato inválido. Apenas ficheiros .pdf, .png e .jpg são permitidos.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      debugPrint('📁 [Evidência] Ficheiro selecionado e validado: $fileName ($filePath - ${fileSize / 1024} KB)');
 
       var badgeId = int.tryParse(widget.badge['id_badge']?.toString() ?? '') ??
           int.tryParse(widget.badge['id']?.toString() ?? '');
@@ -653,6 +697,63 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
     }
   }
 
+  Future<void> _descarregarEvidencia(Map<String, dynamic> doc) async {
+    final url = doc['url_ficheiro']?.toString() ?? doc['url']?.toString();
+    final localPath = doc['caminho_local']?.toString();
+    final nome = doc['nome_ficheiro']?.toString() ?? 'evidencia.pdf';
+
+    // 1. Se existir ficheiro localmente, tenta abri-lo
+    if (localPath != null && localPath.isNotEmpty && File(localPath).existsSync()) {
+      final uri = Uri.file(localPath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        return;
+      }
+    }
+
+    // 2. Se houver URL remota, transfere o ficheiro de forma segura com token Bearer
+    if (url != null && url.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('A transferir $nome...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final downloadedPath = await ApiClient().downloadFile(url, customFileName: nome);
+      if (downloadedPath != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ficheiro transferido: $nome'),
+            action: SnackBarAction(
+              label: 'Abrir',
+              onPressed: () async {
+                final uri = Uri.parse(url.startsWith('http') ? url : 'file://$downloadedPath');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
+          ),
+        );
+      } else if (url.startsWith('http')) {
+        // Fallback: abrir via browser / viewer
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ficheiro não disponível para transferência.')),
+        );
+      }
+    }
+  }
+
   Widget _buildEvidenciaSeccao(Map<String, dynamic> req) {
     final reqId = int.tryParse(req['id_requisito']?.toString() ?? '');
     if (reqId == null) return const SizedBox.shrink();
@@ -675,21 +776,34 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
             const Icon(Icons.description_outlined, size: 18, color: AppCores.azulFundo),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                nomeFicheiro,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppCores.fontes,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              child: GestureDetector(
+                onTap: () => _descarregarEvidencia(doc),
+                child: Text(
+                  nomeFicheiro,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppCores.fontes,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline,
+                  ),
                 ),
               ),
             ),
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
+              icon: const Icon(Icons.download_rounded, color: AppCores.azulFundo, size: 18),
+              tooltip: 'Descarregar documento',
+              onPressed: () => _descarregarEvidencia(doc),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
               icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+              tooltip: 'Remover evidência',
               onPressed: () => _removerEvidencia(doc),
             ),
           ],
