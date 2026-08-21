@@ -476,6 +476,7 @@ class _CandidaturasScreenState extends State<CandidaturasScreen> {
                       itemBuilder: (context, index) {
                         final badge = filteredBadges[index];
                         return BadgeCard(
+                          badgeId: badge['id_badge'] ?? badge['id'],
                           title: badge['title'],
                           category: badge['category'],
                           points: badge['points'],
@@ -486,6 +487,7 @@ class _CandidaturasScreenState extends State<CandidaturasScreen> {
                           progressPercentage: badge['progressPercentage'],
                           alertMessage: badge['alertMessage'],
                           imagem: badge['imagem'],
+                          badgeDataOverride: badge,
                         );
                       },
                     ),

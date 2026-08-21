@@ -215,7 +215,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil updated successfully!')),
+          SnackBar(content: Text(l10n?.perfilAtualizadoSucesso ?? 'Perfil atualizado com sucesso!')),
         );
         if (context.canPop()) {
           context.pop();

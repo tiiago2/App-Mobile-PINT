@@ -4,6 +4,7 @@ import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 import '../widgets/top_bar_actions.dart';
 import '../controllers/objetivos_controller.dart';
+import 'badge_detalhe.dart';
 
 class ObjetivosScreen extends StatefulWidget {
   const ObjetivosScreen({super.key});
@@ -114,15 +115,25 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
           );
         });
       },
-      child: Container(
-        padding: const EdgeInsets.all(12.0),
-        decoration: BoxDecoration(
-          color: AppCores.branco,
-          borderRadius: BorderRadius.circular(AppBorders.padrao),
-          border: Border.all(color: AppCores.outline, width: 1.6),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BadgeDetalheScreen(badge: obj),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(12.0),
+          decoration: BoxDecoration(
+            color: AppCores.branco,
+            borderRadius: BorderRadius.circular(AppBorders.padrao),
+            border: Border.all(color: AppCores.outline, width: 1.6),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
@@ -353,7 +364,8 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
         ],
       ),
     ),
-  );
+  ),
+);
 }
 
   // ── Build ─────────────────────────────────────────────────────────────────

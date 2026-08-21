@@ -32,11 +32,16 @@ class BadgeItemModular extends StatelessWidget {
   final Color? imageColor;
   final BlendMode? imageBlendMode;
 
+  final bool enableTap;
+  final VoidCallback? onTap;
+
   const BadgeItemModular({
     super.key,
     required this.badge,
     this.imageColor,
     this.imageBlendMode,
+    this.enableTap = true,
+    this.onTap,
   });
 
   // Placeholder colorido com a inicial do badge
@@ -83,8 +88,88 @@ class BadgeItemModular extends StatelessWidget {
     final hasNetworkImage = imagem is String &&
         (imagem.startsWith('http://') || imagem.startsWith('https://'));
 
+    final itemContent = SizedBox(
+      width: 76.0,
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 76.0,
+                height: 76.0,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: isEspecial
+                      ? Border.all(
+                          color: const Color(0xFFF8AA0B), // Cor de ouro do design
+                          width: 2.0,
+                        )
+                      : null,
+                ),
+                child: hasNetworkImage 
+                    ? ClipOval( 
+                        child: Image.network(
+                          imagem,
+                          fit: BoxFit.cover,
+                          color: imageColor,
+                          colorBlendMode: imageBlendMode,
+                        ),
+                      )
+                    : _buildPlaceholder(),
+              ),
+              if (isEspecial)
+                Positioned(
+                  top: 0.0,
+                  left: 0.0,
+                  child: Container(
+                    width: 22.0,
+                    height: 22.0,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFDF3E), Color(0xFFF8AA0B)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 4.0,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.star_rounded,
+                      color: Colors.white,
+                      size: 14.0,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8.0),
+          Text(
+            badge['titulo'] ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppCores.fontes,
+              fontSize: 12.0,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+
+    if (!enableTap) return itemContent;
+
     return GestureDetector(
-      onTap: () {
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap ?? () {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -92,82 +177,7 @@ class BadgeItemModular extends StatelessWidget {
           ),
         );
       },
-      child: SizedBox(
-        width: 76.0,
-        child: Column(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 76.0,
-                  height: 76.0,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: isEspecial
-                        ? Border.all(
-                            color: const Color(0xFFF8AA0B), // Cor de ouro do design
-                            width: 2.0,
-                          )
-                        : null,
-                  ),
-                  child: hasNetworkImage 
-                      ? ClipOval( 
-                          child: Image.network(
-                            imagem,
-                            fit: BoxFit.cover,
-                            color: imageColor,
-                            colorBlendMode: imageBlendMode,
-                          ),
-                        )
-                      : _buildPlaceholder(),
-                ),
-                if (isEspecial)
-                  Positioned(
-                    top: 0.0,
-                    left: 0.0,
-                    child: Container(
-                      width: 22.0,
-                      height: 22.0,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFFDF3E), Color(0xFFF8AA0B)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 4.0,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.star_rounded,
-                        color: Colors.white,
-                        size: 14.0,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8.0),
-            Text(
-              badge['titulo'] ?? '',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppCores.fontes,
-                fontSize: 12.0,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
+      child: itemContent,
     );
   }
 }

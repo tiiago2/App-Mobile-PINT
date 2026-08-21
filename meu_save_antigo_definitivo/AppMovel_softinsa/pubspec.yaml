@@ -52,6 +52,7 @@ dependencies:
   firebase_messaging: ^15.2.0
   file_picker: 11.0.3
   url_launcher: ^6.3.2
+  open_filex: ^4.6.0
 
 dev_dependencies:
   flutter_test:

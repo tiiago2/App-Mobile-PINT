@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 import '../database/daos/requisitos_dao.dart';
@@ -12,6 +13,7 @@ import '../database/sync_manager.dart';
 import '../database/database_helper.dart';
 import '../database/database_schema.dart';
 import '../database/remote/api_client.dart';
+import '../database/daos/permissoes_dao.dart';
 import '../controllers/auth_controller.dart';
 import '../database/sync_helpers.dart';
 
@@ -382,6 +384,20 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
         return;
       }
 
+      // Validação na tabela local de permissões (toggle == 1)
+      final podeAnexar = await PermissoesDao.instance.podeCarregarFicheiros();
+      if (!podeAnexar) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Não tem permissão para carregar ou anexar ficheiros.'),
+            ),
+          );
+        }
+        return;
+      }
+
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
@@ -698,21 +714,38 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
   }
 
   Future<void> _descarregarEvidencia(Map<String, dynamic> doc) async {
-    final url = doc['url_ficheiro']?.toString() ?? doc['url']?.toString();
-    final localPath = doc['caminho_local']?.toString();
-    final nome = doc['nome_ficheiro']?.toString() ?? 'evidencia.pdf';
-
-    // 1. Se existir ficheiro localmente, tenta abri-lo
-    if (localPath != null && localPath.isNotEmpty && File(localPath).existsSync()) {
-      final uri = Uri.file(localPath);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-        return;
+    // Validação na tabela local de permissões (toggle == 1)
+    final podeDescarregar = await PermissoesDao.instance.podeDescarregarFicheiros();
+    if (!podeDescarregar) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Não tem permissão para descarregar ficheiros.'),
+          ),
+        );
       }
+      return;
     }
 
-    // 2. Se houver URL remota, transfere o ficheiro de forma segura com token Bearer
-    if (url != null && url.isNotEmpty) {
+    final localPath = doc['ficheiro_local']?.toString();
+    final urlRemota = doc['url_ficheiro']?.toString();
+    final nome = doc['ficheiro']?.toString() ?? doc['nome_ficheiro']?.toString() ?? 'evidencia.pdf';
+
+    // 1. Se existir ficheiro localmente, abre-o diretamente
+    if (localPath != null && localPath.isNotEmpty && File(localPath).existsSync()) {
+      debugPrint('📂 [Download] A abrir ficheiro local: $localPath');
+      final result = await OpenFilex.open(localPath);
+      if (result.type != ResultType.done && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível abrir o ficheiro: ${result.message}')),
+        );
+      }
+      return;
+    }
+
+    // 2. Se houver URL remota válida, transfere o ficheiro com token Bearer
+    if (urlRemota != null && urlRemota.isNotEmpty && urlRemota.startsWith('http')) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -722,27 +755,24 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
         );
       }
 
-      final downloadedPath = await ApiClient().downloadFile(url, customFileName: nome);
-      if (downloadedPath != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ficheiro transferido: $nome'),
-            action: SnackBarAction(
-              label: 'Abrir',
-              onPressed: () async {
-                final uri = Uri.parse(url.startsWith('http') ? url : 'file://$downloadedPath');
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-              },
-            ),
-          ),
-        );
-      } else if (url.startsWith('http')) {
-        // Fallback: abrir via browser / viewer
-        final uri = Uri.parse(url);
+      final downloadedPath = await ApiClient().downloadFile(urlRemota, customFileName: nome);
+      if (downloadedPath != null) {
+        debugPrint('✅ [Download] Ficheiro transferido: $downloadedPath');
+        final result = await OpenFilex.open(downloadedPath);
+        if (result.type != ResultType.done && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Não foi possível abrir o ficheiro: ${result.message}')),
+          );
+        }
+      } else if (mounted) {
+        // Fallback: tentar abrir a URL no browser
+        final uri = Uri.parse(urlRemota);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erro ao transferir o ficheiro.')),
+          );
         }
       }
     } else {
@@ -760,9 +790,7 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
 
     final doc = _requisitoDocumentos[reqId];
     if (doc != null) {
-      final String nomeFicheiro = doc['nome_ficheiro']?.toString() ?? 
-                                  doc['caminho_local']?.toString().split('/').last ?? 
-                                  'Evidência';
+      const String nomeFicheiro = 'Evidência';
       return Container(
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

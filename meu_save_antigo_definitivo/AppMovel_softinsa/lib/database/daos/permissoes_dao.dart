@@ -11,27 +11,84 @@ class PermissoesDao {
   final _changes = StreamController<int>.broadcast();
   Stream<int> get changes => _changes.stream;
 
-  /// Retrieves a specific permission by user_id and key.
-  Future<Map<String, dynamic>?> getPermissao(int userId, String permissionKey) async {
-    final db = await DatabaseHelper.instance.database;
-    final rows = await db.query(
-      DatabaseSchema.permissoesTable,
-      where: 'user_id = ? AND permission_key = ? AND deleted_at IS NULL',
-      whereArgs: [userId, permissionKey],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return rows.first;
-  }
-
-  /// Lists all active permissions for a user.
-  Future<List<Map<String, dynamic>>> getPermissoesDoUtilizador(int userId) async {
+  /// Retrieves all permissions from the local database.
+  Future<List<Map<String, dynamic>>> obterTodasPermissoes() async {
     final db = await DatabaseHelper.instance.database;
     return db.query(
       DatabaseSchema.permissoesTable,
-      where: 'user_id = ? AND deleted_at IS NULL',
-      whereArgs: [userId],
+      where: 'deleted_permissao IS NOT 1',
+      orderBy: 'id_permissao ASC',
     );
+  }
+
+  /// Verifica se uma determinada permissão tem o toggle ativo (toggle == 1).
+  /// Retorna true se toggle == 1, false se toggle == 0.
+  Future<bool> verificarPermissao({int? idPermissao, String? termo}) async {
+    final db = await DatabaseHelper.instance.database;
+    String where = 'deleted_permissao IS NOT 1';
+    final List<dynamic> args = [];
+
+    if (idPermissao != null) {
+      where += ' AND id_permissao = ?';
+      args.add(idPermissao);
+    } else if (termo != null && termo.trim().isNotEmpty) {
+      where += ' AND (LOWER(descricao_permissao) LIKE ? OR LOWER(scope_json) LIKE ?)';
+      final pattern = '%${termo.trim().toLowerCase()}%';
+      args.add(pattern);
+      args.add(pattern);
+    }
+
+    final rows = await db.query(
+      DatabaseSchema.permissoesTable,
+      where: where,
+      whereArgs: args,
+    );
+
+    if (rows.isEmpty) {
+      return true;
+    }
+
+    return rows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
+  }
+
+  /// Verifica se o utilizador tem permissão para carregar/anexar ficheiros (toggle == 1).
+  Future<bool> podeCarregarFicheiros() async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      DatabaseSchema.permissoesTable,
+      where: "(LOWER(descricao_permissao) LIKE '%upload%' OR LOWER(descricao_permissao) LIKE '%anexar%' OR LOWER(descricao_permissao) LIKE '%evidencia%' OR LOWER(descricao_permissao) LIKE '%documento%' OR LOWER(scope_json) LIKE '%upload%') AND deleted_permissao IS NOT 1",
+    );
+
+    if (rows.isEmpty) {
+      final allRows = await db.query(
+        DatabaseSchema.permissoesTable,
+        where: 'deleted_permissao IS NOT 1',
+      );
+      if (allRows.isEmpty) return true;
+      return allRows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
+    }
+
+    return rows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
+  }
+
+  /// Verifica se o utilizador tem permissão para descarregar ficheiros (toggle == 1).
+  Future<bool> podeDescarregarFicheiros() async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      DatabaseSchema.permissoesTable,
+      where: "(LOWER(descricao_permissao) LIKE '%download%' OR LOWER(descricao_permissao) LIKE '%descarregar%' OR LOWER(descricao_permissao) LIKE '%ficheiro%' OR LOWER(scope_json) LIKE '%download%') AND deleted_permissao IS NOT 1",
+    );
+
+    if (rows.isEmpty) {
+      final allRows = await db.query(
+        DatabaseSchema.permissoesTable,
+        where: 'deleted_permissao IS NOT 1',
+      );
+      if (allRows.isEmpty) return true;
+      return allRows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
+    }
+
+    return rows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
   }
 
   /// Batch upserts permissions from sync.

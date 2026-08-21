@@ -87,7 +87,7 @@ class _EsqueciPasswordScreenState extends State<EsqueciPasswordScreen> {
     if (password.isEmpty) {
       passwordErro = l10n.authCampoObrigatorio;
     } else if (password.length < 6) {
-      passwordErro = 'A password deve ter pelo menos 6 caracteres.';
+      passwordErro = l10n.authPasswordCurta;
     }
 
     if (confirmarPassword.isEmpty) {
@@ -110,12 +110,42 @@ class _EsqueciPasswordScreenState extends State<EsqueciPasswordScreen> {
   }
 
   String _mapearErro(AppLocalizations l10n, ApiException erro) {
-    if (erro.message == 'connection' || erro.message == 'timeout') {
+    if (erro.statusCode == 401 || erro.statusCode == 403) {
+      return l10n.authLoginCredenciaisInvalidas;
+    }
+
+    final msg = erro.message.toLowerCase();
+
+    if (msg == 'connection' || msg == 'timeout') {
       return l10n.authErroLigacao;
     }
 
-    if (erro.message == 'invalid_json' || erro.message == 'error') {
+    if (msg == 'invalid_json' || msg == 'error') {
       return l10n.authErroGenerico;
+    }
+
+    if (msg.contains('requisito') || msg.contains('cumpre') || msg.contains('requirement')) {
+      return l10n.authPasswordRequisitos;
+    }
+
+    if (msg.contains('not found') || msg.contains('nao encontrado') || msg.contains('não encontrado')) {
+      return l10n.authUtilizadorNaoEncontrado;
+    }
+
+    if (msg.contains('ja registado') || msg.contains('já se encontra') || msg.contains('already') || msg.contains('existe')) {
+      return l10n.authEmailJaRegistado;
+    }
+
+    if (msg.contains('match') || msg.contains('coincid') || msg.contains('diferente')) {
+      return l10n.authPasswordsDiferentes;
+    }
+
+    if (msg.contains('6') || msg.contains('short') || msg.contains('curta') || msg.contains('caracter')) {
+      return l10n.authPasswordCurta;
+    }
+
+    if (msg.contains('credenciais') || msg.contains('credentials')) {
+      return l10n.authLoginCredenciaisInvalidas;
     }
 
     return erro.message;

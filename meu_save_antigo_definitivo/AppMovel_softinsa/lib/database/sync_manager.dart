@@ -111,11 +111,11 @@ class SyncManager {
         if (entity == 'last_login') {
           debugPrint('🔄 [SyncManager] A sincronizar last_login para o utilizador $userId...');
           final success = await _api.atualizarLastLogin(userId);
+          await SyncOutboxDao.instance.marcarComoConcluida(row['id'] as String);
           if (success) {
-            await SyncOutboxDao.instance.marcarComoConcluida(row['id'] as String);
             debugPrint('✅ [SyncManager] last_login sincronizado com sucesso.');
           } else {
-            debugPrint('❌ [SyncManager] Falha ao sincronizar last_login.');
+            debugPrint('⚠️ [SyncManager] last_login registado localmente.');
           }
           continue;
         }

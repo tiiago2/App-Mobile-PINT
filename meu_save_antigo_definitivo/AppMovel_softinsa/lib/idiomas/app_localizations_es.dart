@@ -148,6 +148,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authPasswordsDiferentes => 'Las contraseñas no coinciden.';
 
   @override
+  String get authPasswordCurta =>
+      'La contraseña debe tener al menos 6 caracteres.';
+
+  @override
+  String get authPasswordRequisitos =>
+      'La contraseña no cumple con los requisitos mínimos.';
+
+  @override
+  String get authUtilizadorNaoEncontrado => 'Usuario no encontrado.';
+
+  @override
+  String get authEmailJaRegistado =>
+      'Este correo electrónico ya está registrado.';
+
+  @override
   String get authPoliticasObrigatorias =>
       'Debes aceptar la Política de Privacidade y los Términos de Uso.';
 

@@ -121,15 +121,29 @@ class ObjetivosController extends ChangeNotifier {
 
         final mapped = {
           'id': obj['id_objetivo_local'],
+          'id_objetivo_local': obj['id_objetivo_local'],
+          'id_badge': badgeId,
           'titulo': obj['nome_badge'] ?? '',
-          'categoria': obj['categoria_badge'] ?? '',
+          'nome_badge': obj['nome_badge'] ?? '',
+          'title': obj['nome_badge'] ?? '',
+          'descricao': obj['descricao_badge'] ?? '',
+          'descricao_badge': obj['descricao_badge'] ?? '',
+          'categoria': obj['categoria_badge'] ?? 'Geral',
+          'areaNome': obj['categoria_badge'] ?? 'Geral',
+          'area': obj['categoria_badge'] ?? 'Geral',
+          'nivelNome': obj['nivel_badge'] ?? 'Básico',
+          'nivel': obj['nivel_badge'] ?? 'Básico',
+          'pontos': obj['pontos_badge'] ?? 0,
+          'validadeDias': obj['validade'] ?? 0,
+          'especial': obj['especial'] == 1 || obj['especial'] == true,
           'deadline': dataFinalStr != null ? _formatDateDisplay(dataFinalStr) : '',
           'diasRestantes': diasRestantes,
           'progresso': progress,
           'ativo': !concluido && diasRestantes > 0,
           'concluido': concluido,
           'imagem': obj['imagem'],
-          'id_badge': badgeId,
+          'estado': concluido ? 'conquistados' : (diasRestantes > 0 ? 'emProgresso' : 'expirados'),
+          'status': concluido ? 'conquistados' : (diasRestantes > 0 ? 'emProgresso' : 'expirados'),
         };
 
         if (mapped['ativo'] == true) {

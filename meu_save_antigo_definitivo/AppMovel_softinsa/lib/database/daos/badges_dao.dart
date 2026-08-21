@@ -233,7 +233,7 @@ class BadgesDao {
   }) async {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.rawQuery('''
-      SELECT b.id_badge, b.nome_badge, b.imagem, b.especial, b.pontos_badge as pontos,
+      SELECT b.id_badge, b.nome_badge, b.descricao_badge, b.validade, b.imagem, b.especial, b.pontos_badge as pontos,
              a.nome_area as areaNome, n.nome_nivel as nivelNome, b.id_nivel as nivelId,
              sl.nome_service_line as serviceLineNome, sl.id_service_line as serviceLineId,
              lp.nome_learning_path as learningPathNome, lp.id_learning_path as learningPathId,
@@ -295,18 +295,28 @@ class BadgesDao {
 
       return {
         'id_badge': row['id_badge'],
+        'id': row['id_badge'],
         'titulo': row['nome_badge'] ?? '',
         'nome_badge': row['nome_badge'] ?? '',
+        'title': row['nome_badge'] ?? '',
+        'descricao': row['descricao_badge'] ?? '',
+        'descricao_badge': row['descricao_badge'] ?? '',
         'imagem': row['imagem'],
         'especial': isEspecial,
         'minha_area': isMinhaArea,
         'minhaArea': isMinhaArea,
         'estado': row['estado'] ?? 'disponivel',
+        'status': row['estado'] ?? 'disponivel',
         'progresso': progressPercentage,
         'areaNome': row['areaNome'] ?? 'Geral',
+        'area': row['areaNome'] ?? 'Geral',
+        'categoria': row['areaNome'] ?? 'Geral',
         'nivelNome': row['nivelNome'] ?? 'Básico',
+        'nivel': row['nivelNome'] ?? 'Básico',
         'nivelId': row['nivelId'],
         'pontos': row['pontos'] ?? 0,
+        'validade': row['validade'],
+        'validadeDias': row['validade'] ?? 0,
         'serviceLineNome': row['serviceLineNome'],
         'serviceLineId': row['serviceLineId'],
         'learningPathNome': row['learningPathNome'],

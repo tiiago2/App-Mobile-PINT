@@ -370,6 +370,30 @@ abstract class AppLocalizations {
   /// **'As palavras-passe não coincidem.'**
   String get authPasswordsDiferentes;
 
+  /// No description provided for @authPasswordCurta.
+  ///
+  /// In pt, this message translates to:
+  /// **'A palavra-passe deve ter pelo menos 6 caracteres.'**
+  String get authPasswordCurta;
+
+  /// No description provided for @authPasswordRequisitos.
+  ///
+  /// In pt, this message translates to:
+  /// **'A palavra-passe não cumpre os requisitos mínimos.'**
+  String get authPasswordRequisitos;
+
+  /// No description provided for @authUtilizadorNaoEncontrado.
+  ///
+  /// In pt, this message translates to:
+  /// **'Utilizador não encontrado.'**
+  String get authUtilizadorNaoEncontrado;
+
+  /// No description provided for @authEmailJaRegistado.
+  ///
+  /// In pt, this message translates to:
+  /// **'Este email já se encontra registado.'**
+  String get authEmailJaRegistado;
+
   /// No description provided for @authPoliticasObrigatorias.
   ///
   /// In pt, this message translates to:
@@ -745,7 +769,7 @@ abstract class AppLocalizations {
   /// No description provided for @perfilAtualizadoSucesso.
   ///
   /// In pt, this message translates to:
-  /// **'Perfil updated com sucesso!'**
+  /// **'Perfil atualizado com sucesso!'**
   String get perfilAtualizadoSucesso;
 
   /// No description provided for @nome.

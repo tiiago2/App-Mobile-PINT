@@ -13,6 +13,7 @@ enum BadgeCardStatus {
 }
 
 class BadgeCard extends StatelessWidget {
+  final int? badgeId;
   final String title;
   final String category;
   final int points;
@@ -23,9 +24,11 @@ class BadgeCard extends StatelessWidget {
   final int? progressPercentage;
   final String? alertMessage;
   final String? imagem;
+  final Map<String, dynamic>? badgeDataOverride;
 
   const BadgeCard({
     super.key,
+    this.badgeId,
     required this.title,
     required this.category,
     required this.points,
@@ -36,6 +39,7 @@ class BadgeCard extends StatelessWidget {
     this.progressPercentage,
     this.alertMessage,
     this.imagem,
+    this.badgeDataOverride,
   });
 
   String _formatDate(DateTime date) {
@@ -88,18 +92,26 @@ class BadgeCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final config = _getStatusConfig(l10n);
 
-    final badgeMap = {
+    final badgeMap = badgeDataOverride ?? {
+      'id': badgeId,
+      'id_badge': badgeId,
       'titulo': title,
+      'nome_badge': title,
+      'title': title,
       'categoria': category,
+      'areaNome': category,
       'pontos': points,
+      'imagem': imagem,
       'icon': icon,
       'avatarColor': avatarColor,
       'estado': status.name,
+      'status': status.name,
       'progresso': progressPercentage ?? 0,
       'descricao': '',
     };
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         Navigator.push(
           context,

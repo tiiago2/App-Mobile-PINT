@@ -81,7 +81,7 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
         imageColor = Colors.grey;
         imageBlendMode = BlendMode.saturation;
       } else if (estado == 'pendentes' || estado == 'recusados' || estado == 'expirados' || estado == 'emProgresso') {
-        imageColor = Colors.white.withOpacity(0.5);
+        imageColor = Colors.white.withValues(alpha: 0.5);
         imageBlendMode = BlendMode.lighten;
       }
     }
@@ -90,9 +90,11 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
       badge: badge,
       imageColor: imageColor,
       imageBlendMode: imageBlendMode,
+      enableTap: false,
     );
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         Navigator.push(
           context,

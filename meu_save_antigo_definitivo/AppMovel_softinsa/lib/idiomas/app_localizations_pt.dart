@@ -148,6 +148,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get authPasswordsDiferentes => 'As palavras-passe não coincidem.';
 
   @override
+  String get authPasswordCurta =>
+      'A palavra-passe deve ter pelo menos 6 caracteres.';
+
+  @override
+  String get authPasswordRequisitos =>
+      'A palavra-passe não cumpre os requisitos mínimos.';
+
+  @override
+  String get authUtilizadorNaoEncontrado => 'Utilizador não encontrado.';
+
+  @override
+  String get authEmailJaRegistado => 'Este email já se encontra registado.';
+
+  @override
   String get authPoliticasObrigatorias =>
       'Tens de aceitar a Política de Privacidade e os Termos de Utilização.';
 
@@ -343,7 +357,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get restantesBadges => 'Restantes Badges';
 
   @override
-  String get perfilAtualizadoSucesso => 'Perfil updated com sucesso!';
+  String get perfilAtualizadoSucesso => 'Perfil atualizado com sucesso!';
 
   @override
   String get nome => 'Nome';

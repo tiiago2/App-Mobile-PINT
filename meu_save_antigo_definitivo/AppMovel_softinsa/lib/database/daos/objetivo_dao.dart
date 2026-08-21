@@ -526,10 +526,12 @@ class ObjetivosDao {
     final db = await DatabaseHelper.instance.database;
     return db.rawQuery('''
       SELECT o.id_objetivo_local, o.id_objetivo, o.data_inicial, o.data_final, o.data_conclusao, o.sync_status,
-             b.id_badge, b.nome_badge, b.imagem, b.pontos_badge, a.nome_area as categoria_badge
+             b.id_badge, b.nome_badge, b.descricao_badge, b.imagem, b.especial, b.pontos_badge, b.validade,
+             a.nome_area as categoria_badge, n.nome_nivel as nivel_badge
       FROM ${DatabaseSchema.objetivosTable} o
       INNER JOIN ${DatabaseSchema.badgesTable} b ON o.id_badge = b.id_badge
       LEFT JOIN ${DatabaseSchema.areasTable} a ON b.id_area = a.id_area
+      LEFT JOIN ${DatabaseSchema.niveisTable} n ON b.id_nivel = n.id_nivel
       WHERE o.id_utilizador = ? 
         AND (o.deleted_objetivo IS NOT 1) 
         AND (b.deleted_badge IS NOT 1)

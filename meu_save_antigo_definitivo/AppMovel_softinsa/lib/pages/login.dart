@@ -90,15 +90,29 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _mapearErro(AppLocalizations l10n, ApiException erro) {
-    if (erro.statusCode == 401) {
+    if (erro.statusCode == 401 || erro.statusCode == 403) {
       return l10n.authLoginCredenciaisInvalidas;
     }
 
-    if (erro.message == 'connection' || erro.message == 'timeout') {
+    final msg = erro.message.toLowerCase();
+
+    if (msg == 'connection' || msg == 'timeout') {
       return l10n.authErroLigacao;
     }
 
-    return l10n.authErroGenerico;
+    if (msg == 'invalid_json' || msg == 'error') {
+      return l10n.authErroGenerico;
+    }
+
+    if (msg.contains('not found') || msg.contains('nao encontrado') || msg.contains('não encontrado')) {
+      return l10n.authUtilizadorNaoEncontrado;
+    }
+
+    if (msg.contains('credenciais') || msg.contains('credentials')) {
+      return l10n.authLoginCredenciaisInvalidas;
+    }
+
+    return erro.message;
   }
 
   Future<void> _submeterLogin() async {

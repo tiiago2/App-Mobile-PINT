@@ -557,13 +557,18 @@ class ApiClient {
 
   Future<bool> atualizarLastLogin(int userId) async {
     try {
+      final token = await SecureStorage.getToken();
       final response = await _dio.put(
         'https://pint-he77.onrender.com/api/putlastlogin',
         data: {'id': userId},
+        options: Options(
+          extra: {'retried': true},
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null,
+        ),
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      debugPrint('❌ [ApiClient] Erro ao atualizar last login no servidor: $e');
+      debugPrint('⚠️ [ApiClient] Erro ao atualizar last login no servidor: $e');
       return false;
     }
   }

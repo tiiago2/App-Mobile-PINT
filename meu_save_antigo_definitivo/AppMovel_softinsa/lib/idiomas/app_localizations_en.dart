@@ -147,6 +147,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authPasswordsDiferentes => 'Passwords do not match.';
 
   @override
+  String get authPasswordCurta => 'Password must be at least 6 characters.';
+
+  @override
+  String get authPasswordRequisitos =>
+      'The password does not meet the minimum requirements.';
+
+  @override
+  String get authUtilizadorNaoEncontrado => 'User not found.';
+
+  @override
+  String get authEmailJaRegistado => 'This email is already registered.';
+
+  @override
   String get authPoliticasObrigatorias =>
       'You must accept the Privacy Policy and Terms of Use.';
 
