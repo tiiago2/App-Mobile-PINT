@@ -16,6 +16,7 @@ import '../database/remote/api_client.dart';
 import '../database/daos/permissoes_dao.dart';
 import '../controllers/auth_controller.dart';
 import '../database/sync_helpers.dart';
+import '../services/certificado_pdf_service.dart';
 
 /// Ecrã de detalhe de um badge.
 ///
@@ -713,6 +714,190 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
     }
   }
 
+  Future<void> _descarregarCertificado() async {
+    // 1. Validação de permissão local (toggle == 1)
+    final podeDescarregar = await PermissoesDao.instance.podeDescarregarFicheiros();
+    if (!podeDescarregar) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Não tem permissão para descarregar ficheiros.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 2. Resolver IDs
+    final user = AuthController.instance.currentUser;
+    final int? userId = int.tryParse(user?['id']?.toString() ?? '') ??
+        int.tryParse(user?['user_id']?.toString() ?? '') ??
+        int.tryParse(user?['id_utilizador']?.toString() ?? '');
+    final int? badgeId = int.tryParse(widget.badge['id_badge']?.toString() ?? '') ??
+        int.tryParse(widget.badge['id']?.toString() ?? '');
+
+    if (userId == null || badgeId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dados insuficientes para gerar o certificado.')),
+        );
+      }
+      return;
+    }
+
+    // 3. Consultar BD local para dados completos
+    try {
+      final db = await DatabaseHelper.instance.database;
+
+      // Registo do badge (data de obtenção, id_registo)
+      final registoRows = await db.rawQuery('''
+        SELECT rb.id_registo, rb.data_obtencao, b.validade, b.imagem,
+               b.nome_badge, b.descricao_badge, b.pontos_badge, b.especial,
+               b.id_area, b.id_nivel
+        FROM ${DatabaseSchema.registoBadgesTable} rb
+        INNER JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = rb.id_badge
+        WHERE rb.id_utilizador = ? AND rb.id_badge = ?
+          AND (rb.deleted_registo IS NOT 1)
+        ORDER BY rb.data_obtencao DESC
+        LIMIT 1
+      ''', [userId, badgeId]);
+
+      if (registoRows.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Registo de conquista não encontrado.')),
+          );
+        }
+        return;
+      }
+
+      final reg = registoRows.first;
+      final idRegisto = int.tryParse(reg['id_registo']?.toString() ?? '') ?? 0;
+      final dataObtencaoStr = reg['data_obtencao']?.toString() ?? '';
+      final validadeDias = int.tryParse(reg['validade']?.toString() ?? '') ?? 0;
+      final imagemUrl = reg['imagem']?.toString() ?? _imagem;
+      final nomeBadge = reg['nome_badge']?.toString() ?? _titulo;
+      final descricaoBadge = reg['descricao_badge']?.toString() ?? _descricao;
+      final pontos = int.tryParse(reg['pontos_badge']?.toString() ?? '') ?? _pontos;
+      final especial = reg['especial'] == 1 || reg['especial'] == true;
+
+      DateTime? dataObtencao;
+      DateTime? dataExpiracao;
+      if (dataObtencaoStr.isNotEmpty) {
+        dataObtencao = DateTime.tryParse(dataObtencaoStr);
+        if (dataObtencao != null && validadeDias > 0) {
+          dataExpiracao = dataObtencao.add(Duration(days: validadeDias));
+        }
+      }
+
+      // Área
+      String areaNome = _area;
+      final idArea = int.tryParse(reg['id_area']?.toString() ?? '');
+      if (idArea != null) {
+        final areaRows = await db.query(
+          DatabaseSchema.areasTable,
+          columns: ['nome_area'],
+          where: 'id_area = ?',
+          whereArgs: [idArea],
+          limit: 1,
+        );
+        if (areaRows.isNotEmpty) {
+          areaNome = areaRows.first['nome_area']?.toString() ?? areaNome;
+        }
+      }
+
+      // Nível
+      String nivelNome = _nivel;
+      final idNivel = int.tryParse(reg['id_nivel']?.toString() ?? '');
+      if (idNivel != null) {
+        final nivelRows = await db.query(
+          DatabaseSchema.niveisTable,
+          columns: ['nome_nivel'],
+          where: 'id_nivel = ?',
+          whereArgs: [idNivel],
+          limit: 1,
+        );
+        if (nivelRows.isNotEmpty) {
+          nivelNome = nivelRows.first['nome_nivel']?.toString() ?? nivelNome;
+        }
+      }
+
+      // Service Line e Learning Path (do badge_json se existir)
+      String serviceLine = '';
+      String learningPath = '';
+      try {
+        final badgeJsonStr = (await db.query(
+          DatabaseSchema.badgesTable,
+          columns: ['badge_json'],
+          where: 'id_badge = ?',
+          whereArgs: [badgeId],
+          limit: 1,
+        )).firstOrNull?['badge_json']?.toString();
+        if (badgeJsonStr != null && badgeJsonStr.isNotEmpty) {
+          final bj = jsonDecode(badgeJsonStr);
+          serviceLine = bj['service_line']?.toString() ?? bj['serviceLine']?.toString() ?? '';
+          learningPath = bj['learning_path']?.toString() ?? bj['learningPath']?.toString() ?? '';
+        }
+      } catch (_) {}
+
+      // Nome do consultor
+      final nomeConsultor = user?['nome'] ?? user?['name'] ?? user?['nome_utilizador'] ?? '';
+      final emailConsultor = user?['email'] ?? '';
+
+      // URL pública
+      final urlPublica = 'https://pint-frontend-un33.onrender.com/badges/$badgeId';
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A gerar certificado...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // 4. Gerar o PDF
+      final filePath = await CertificadoPdfService.gerarCertificadoBadgePdf(
+        CertificadoBadgeData(
+          nomeBadge: nomeBadge,
+          descricaoBadge: descricaoBadge,
+          imagemBadgeUrl: imagemUrl,
+          pontos: pontos,
+          validadeDias: validadeDias,
+          nivel: nivelNome,
+          area: areaNome,
+          serviceLine: serviceLine,
+          learningPath: learningPath,
+          especial: especial,
+          nomeConsultor: nomeConsultor.toString(),
+          emailConsultor: emailConsultor.toString(),
+          idRegisto: idRegisto,
+          dataObtencao: dataObtencao,
+          dataExpiracao: dataExpiracao,
+          urlPublica: urlPublica,
+        ),
+      );
+
+      // 5. Abrir o PDF
+      if (mounted) {
+        final result = await OpenFilex.open(filePath);
+        if (result.type != ResultType.done && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Não foi possível abrir o certificado: ${result.message}')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Certificado] Erro ao gerar certificado: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao gerar certificado: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _descarregarEvidencia(Map<String, dynamic> doc) async {
     // Validação na tabela local de permissões (toggle == 1)
     final podeDescarregar = await PermissoesDao.instance.podeDescarregarFicheiros();
@@ -1086,57 +1271,86 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
 
   Widget _buildHero(AppLocalizations l10n) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: AppCores.fundo2,
         borderRadius: BorderRadius.circular(AppBorders.padrao),
         border: Border.all(color: AppCores.outline),
       ),
-      child: Column(
+      child: Stack(
         children: [
-          _buildAvatar(),
-          const SizedBox(height: 16),
-          Text(
-            _titulo,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppCores.fontes,
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Center(child: _buildAvatar()),
+                const SizedBox(height: 16),
+                Text(
+                  _titulo,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppCores.fontes,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (_descricao.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _descricao,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppCores.fontes.withValues(alpha: 0.75),
+                      fontSize: 14,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (_pontos > 0)
+                      _meta(Icons.school_outlined, '$_pontos ${l10n.pts}'),
+                    if (_nivel.isNotEmpty)
+                      _meta(Icons.signal_cellular_alt_rounded, _nivel),
+                    if (_area.isNotEmpty)
+                      _meta(Icons.work_outline_rounded, _area),
+                    _meta(
+                      _especial ? Icons.star_rounded : Icons.badge_outlined,
+                      _especial ? l10n.especial : l10n.normal,
+                    ),
+                    if (_validadeDias > 0)
+                      _meta(Icons.event_outlined, '$_validadeDias ${l10n.dias}'),
+                  ],
+                ),
+              ],
             ),
           ),
-          if (_descricao.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              _descricao,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppCores.fontes.withValues(alpha: 0.75),
-                fontSize: 14,
-                height: 1.45,
+          if (_isConquistado)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                tooltip: 'Partilhar no LinkedIn',
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0077B5).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.share_rounded,
+                    color: Color(0xFF0077B5),
+                    size: 18,
+                  ),
+                ),
+                onPressed: _partilharLinkedin,
               ),
             ),
-          ],
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (_pontos > 0)
-                _meta(Icons.school_outlined, '$_pontos ${l10n.pts}'),
-              if (_nivel.isNotEmpty)
-                _meta(Icons.signal_cellular_alt_rounded, _nivel),
-              if (_area.isNotEmpty)
-                _meta(Icons.work_outline_rounded, _area),
-              _meta(
-                _especial ? Icons.star_rounded : Icons.badge_outlined,
-                _especial ? l10n.especial : l10n.normal,
-              ),
-              if (_validadeDias > 0)
-                _meta(Icons.event_outlined, '$_validadeDias ${l10n.dias}'),
-            ],
-          ),
         ],
       ),
     );
@@ -1534,22 +1748,22 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0077B5), // LinkedIn blue color
+                  backgroundColor: AppCores.azulFundo,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                icon: const Icon(Icons.share_outlined, color: Colors.white, size: 20),
+                icon: const Icon(Icons.download_rounded, color: Colors.white, size: 20),
                 label: const Text(
-                  'PARTILHAR NO LINKEDIN',
+                  'DESCARREGAR CERTIFICADO',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                onPressed: _partilharLinkedin,
+                onPressed: _descarregarCertificado,
               ),
             ],
           ],
