@@ -1054,6 +1054,12 @@ abstract class AppLocalizations {
   /// **'Média de Progresso'**
   String get mediaProgressoKpi;
 
+  /// No description provided for @taxaAprovacaoKpi.
+  ///
+  /// In pt, this message translates to:
+  /// **'Taxa de Aprovação'**
+  String get taxaAprovacaoKpi;
+
   /// No description provided for @objetivosAtivosKpi.
   ///
   /// In pt, this message translates to:

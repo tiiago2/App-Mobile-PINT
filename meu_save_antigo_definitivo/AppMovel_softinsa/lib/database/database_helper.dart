@@ -8,7 +8,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _databaseName = 'softinsa_mobile.db';
-  static const int databaseVersion = 9;
+  static const int databaseVersion = 11;
 
   Database? _database;
 
@@ -35,6 +35,8 @@ class DatabaseHelper {
       onUpgrade: (db, oldVersion, newVersion) async {
         // Drop tables in dependency order
         final tables = [
+          'user_badges',
+          'notificacao_recetores',
           DatabaseSchema.badgesRequisitosTable,
           DatabaseSchema.documentosSubmissaoTable,
           DatabaseSchema.badgesAssinaturaTable,

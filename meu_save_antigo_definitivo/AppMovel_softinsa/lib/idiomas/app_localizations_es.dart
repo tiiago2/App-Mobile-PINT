@@ -502,6 +502,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mediaProgressoKpi => 'Progreso promedio';
 
   @override
+  String get taxaAprovacaoKpi => 'Tasa de aprobación';
+
+  @override
   String get objetivosAtivosKpi => 'Objetivos activos';
 
   @override

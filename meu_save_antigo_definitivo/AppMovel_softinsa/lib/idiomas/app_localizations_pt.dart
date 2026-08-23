@@ -502,6 +502,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get mediaProgressoKpi => 'Média de Progresso';
 
   @override
+  String get taxaAprovacaoKpi => 'Taxa de Aprovação';
+
+  @override
   String get objetivosAtivosKpi => 'Objetivos Ativos';
 
   @override

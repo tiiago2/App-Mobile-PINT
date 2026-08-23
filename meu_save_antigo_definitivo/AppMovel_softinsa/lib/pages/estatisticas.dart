@@ -25,7 +25,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
   bool _isLoading = true;
   int _totalBadgesKpiValue = 0;
   String _lugarGeralKpiValue = '1.º';
-  double _mediaProgressoKpiValue = 0.0;
+  double _taxaAprovacaoKpiValue = 0.0;
   int _objetivosAtivosKpiValue = 0;
 
   List<Map<String, dynamic>> _listaClassificacao = [];
@@ -58,8 +58,11 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       final userId = intOrNull(user?['id'] ?? user?['user_id'] ?? user?['id_utilizador']);
       final db = await DatabaseHelper.instance.database;
 
-      // 1. KPI: Total de Badges (contar linhas da tabela badges onde deleted_badge = 0)
-      final totalBadgesRes = await db.rawQuery('SELECT COUNT(*) as cnt FROM badges WHERE deleted_badge = 0');
+      // 1. KPI: Total de Badges (badges conquistados pelo utilizador - igual ao consultor)
+      final totalBadgesRes = await db.rawQuery(
+        'SELECT COUNT(*) as cnt FROM registo_badges WHERE id_utilizador = ?',
+        [userId ?? 0],
+      );
       final totalBadges = Sqflite.firstIntValue(totalBadgesRes) ?? 0;
 
       // 2. Classificação Geral e Lugar Geral (outros_users ordenado por pontos_totais, associado a service_lines)
@@ -206,51 +209,34 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
         });
       }
 
-      // 5. Média de Progresso
-      double mediaProgresso = 0.0;
+      // 5. Taxa de Aprovação (igual ao consultor: aceites / (aceites + rejeitados), só fechadas)
+      double taxaAprovacao = 0.0;
       if (userId != null) {
-        final progSubmissoes = await db.rawQuery('''
-          SELECT id_submissao, id_submissao_local, id_badge
-          FROM submissoes
-          WHERE id_utilizador = ?
-            AND status IN ('em_progresso', 'emprogresso', 'draft', 'rascunho')
-            AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = 'false' OR deleted_submissao = '0')
-        ''', [userId]);
+        const statusAceites = [
+          'aceite',
+          'concluído',
+          'concluido',
+          'aprovado',
+          'fechado',
+        ];
+        const statusRejeitados = [
+          'recusada',
+          'rejeitada',
+          'rejeitado',
+        ];
 
-        if (progSubmissoes.isNotEmpty) {
-          double somaMedias = 0.0;
-          for (final sub in progSubmissoes) {
-            final subId = sub['id_submissao'];
-            final subLocalId = sub['id_submissao_local'];
-            final badgeId = sub['id_badge'];
+        final aceitesCount = Sqflite.firstIntValue(await db.rawQuery(
+          'SELECT COUNT(*) as c FROM submissoes WHERE id_utilizador = ? AND LOWER(TRIM(status)) IN (${List.filled(statusAceites.length, '?').join(',')})',
+          [userId, ...statusAceites],
+        )) ?? 0;
 
-            final reqsCountRes = await db.rawQuery('''
-              SELECT COUNT(*) as cnt FROM badges_requisitos WHERE id_badge = ?
-            ''', [badgeId]);
-            final totalReqs = Sqflite.firstIntValue(reqsCountRes) ?? 0;
+        final rejeitadosCount = Sqflite.firstIntValue(await db.rawQuery(
+          'SELECT COUNT(*) as c FROM submissoes WHERE id_utilizador = ? AND LOWER(TRIM(status)) IN (${List.filled(statusRejeitados.length, '?').join(',')})',
+          [userId, ...statusRejeitados],
+        )) ?? 0;
 
-            final compReqsRes = await db.rawQuery('''
-              SELECT COUNT(DISTINCT id_requisito) as cnt
-              FROM documentos_submissao
-              WHERE (
-                (id_submissao IS NOT NULL AND id_submissao = ?) 
-                OR 
-                (id_submissao_local IS NOT NULL AND id_submissao_local = ?)
-              )
-              AND (deleted_file = 0 OR deleted_file IS NULL OR deleted_file = '')
-            ''', [subId, subLocalId]);
-            final compReqs = Sqflite.firstIntValue(compReqsRes) ?? 0;
-
-            double progress = 0.0;
-            if (totalReqs > 0) {
-              progress = compReqs / totalReqs;
-            } else {
-              progress = 0.45;
-            }
-            somaMedias += progress;
-          }
-          mediaProgresso = somaMedias / progSubmissoes.length;
-        }
+        final fechadas = aceitesCount + rejeitadosCount;
+        taxaAprovacao = fechadas > 0 ? (aceitesCount / fechadas) : 0.0;
       }
 
       // 6. Objetivos Ativos (retirar concluídos e expirados)
@@ -433,7 +419,7 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
         setState(() {
           _totalBadgesKpiValue = totalBadges;
           _lugarGeralKpiValue = lugarGeral;
-          _mediaProgressoKpiValue = mediaProgresso;
+          _taxaAprovacaoKpiValue = taxaAprovacao;
           _objetivosAtivosKpiValue = objetivosAtivos;
           _listaClassificacao = todosUsers;
           _distribuicaoBadges = distBadges;
@@ -546,8 +532,8 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
       {
         'icon': UIcons.boldRounded.chart_histogram,
         'iconColor': const Color(0xFFE17100),
-        'value': '${(_mediaProgressoKpiValue * 100).toStringAsFixed(0)}%',
-        'label': l10n?.mediaProgressoKpi ?? 'Média de Progresso',
+        'value': '${(_taxaAprovacaoKpiValue * 100).toStringAsFixed(0)}%',
+        'label': l10n?.taxaAprovacaoKpi ?? 'Taxa de Aprovação',
       },
       {
         'icon': UIcons.boldRounded.target,
