@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../variaveis/variaveis.dart';
 import '../../pages/badge_detalhe.dart';
+import '../../controllers/galeria_controller.dart';
 
 class GaleriaBadgesModular extends StatelessWidget {
   final List<Map<String, dynamic>> badges;
@@ -156,13 +157,14 @@ class BadgeItemModular extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap ?? () {
-        Navigator.push(
+      onTap: onTap ?? () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => BadgeDetalheScreen(badge: badge),
           ),
         );
+        GaleriaController.instance.carregarDados();
       },
       child: itemContent,
     );

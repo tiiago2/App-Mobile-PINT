@@ -255,26 +255,29 @@ class BadgesDao {
                 )
              ) as requisitos_completos,
              COALESCE(
-               (SELECT CASE 
-                         WHEN rb.expirado = 1 
-                              OR (b.validade IS NOT NULL 
-                                  AND datetime(rb.data_obtencao, '+' || b.validade || ' day') < datetime('now'))
-                         THEN 'expirados' 
-                         ELSE 'conquistados' 
-                       END 
+               (SELECT 'conquistados' 
                 FROM ${DatabaseSchema.registoBadgesTable} rb 
                 WHERE rb.id_utilizador = ? AND rb.id_badge = b.id_badge AND (rb.deleted_registo IS NOT 1)
+                  AND (rb.expirado IS NOT 1 AND rb.expirado != 1)
+                  AND (b.validade IS NULL OR datetime(rb.data_obtencao, '+' || b.validade || ' day') >= datetime('now'))
                 ORDER BY rb.data_obtencao DESC, rb.id_registo DESC
                 LIMIT 1),
-                (SELECT CASE 
-                          WHEN LOWER(TRIM(s.status)) IN ('rascunho', 'draft', 'em_progresso') THEN 'emProgresso'
-                          WHEN LOWER(TRIM(s.status)) IN ('submetida_pendente', 'pendente', 'submitted', 'aceite talent') THEN 'pendentes'
-                          WHEN LOWER(TRIM(s.status)) IN ('rejeitado', 'rejeitada', 'reprovado', 'reprovada', 'recusado', 'recusada', 'rejected') THEN 'recusados'
-                          ELSE 'disponivel'
-                        END
+               (SELECT CASE 
+                         WHEN LOWER(TRIM(s.status)) IN ('rascunho', 'draft', 'em_progresso', 'emprogresso') THEN 'emProgresso'
+                         WHEN LOWER(TRIM(s.status)) IN ('submetida_pendente', 'pendente', 'submitted', 'aceite talent') THEN 'pendentes'
+                         WHEN LOWER(TRIM(s.status)) IN ('rejeitado', 'rejeitada', 'reprovado', 'reprovada', 'recusado', 'recusada', 'rejected') THEN 'recusados'
+                         ELSE 'disponivel'
+                       END
                 FROM ${DatabaseSchema.submissoesTable} s
-                WHERE s.id_utilizador = ? AND s.id_badge = b.id_badge AND (s.deleted_submissao IS NOT 1)
+                WHERE s.id_utilizador = ? AND s.id_badge = b.id_badge 
+                  AND (s.deleted_submissao = 0 OR s.deleted_submissao IS NULL OR s.deleted_submissao = '0' OR s.deleted_submissao = 'false')
                 ORDER BY s.id_submissao_local DESC
+                LIMIT 1),
+               (SELECT 'expirados' 
+                FROM ${DatabaseSchema.registoBadgesTable} rb 
+                WHERE rb.id_utilizador = ? AND rb.id_badge = b.id_badge AND (rb.deleted_registo IS NOT 1)
+                  AND (rb.expirado = 1 OR (b.validade IS NOT NULL AND datetime(rb.data_obtencao, '+' || b.validade || ' day') < datetime('now')))
+                ORDER BY rb.data_obtencao DESC, rb.id_registo DESC
                 LIMIT 1),
                'disponivel'
              ) as estado
@@ -284,7 +287,7 @@ class BadgesDao {
       LEFT JOIN ${DatabaseSchema.serviceLinesTable} sl ON a.id_service_line = sl.id_service_line
       LEFT JOIN ${DatabaseSchema.learningPathsTable} lp ON sl.id_learning_path = lp.id_learning_path
       WHERE (b.deleted_badge IS NOT 1)
-    ''', [userAreaId, userId, userId, userId]);
+    ''', [userAreaId, userId, userId, userId, userId]);
 
     return rows.map((row) {
       final isEspecial = (row['especial'] == 1 || row['especial'] == true);
@@ -564,28 +567,35 @@ class BadgesDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.rawQuery('''
       SELECT COALESCE(
-        (SELECT CASE 
-                  WHEN rb.expirado = 1 
-                  THEN 'expirados' 
-                  ELSE 'conquistados' 
-                END 
+        (SELECT 'conquistados' 
          FROM ${DatabaseSchema.registoBadgesTable} rb 
+         INNER JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = rb.id_badge
          WHERE rb.id_utilizador = ? AND rb.id_badge = ? AND (rb.deleted_registo IS NOT 1)
+           AND (rb.expirado IS NOT 1 AND rb.expirado != 1)
+           AND (b.validade IS NULL OR datetime(rb.data_obtencao, '+' || b.validade || ' day') >= datetime('now'))
          ORDER BY rb.data_obtencao DESC, rb.id_registo DESC
          LIMIT 1),
         (SELECT CASE 
-                  WHEN LOWER(TRIM(s.status)) IN ('rascunho', 'draft', 'em_progresso') THEN 'emProgresso'
+                  WHEN LOWER(TRIM(s.status)) IN ('rascunho', 'draft', 'em_progresso', 'emprogresso') THEN 'emProgresso'
                   WHEN LOWER(TRIM(s.status)) IN ('submetida_pendente', 'pendente', 'submitted', 'aceite talent') THEN 'pendentes'
                   WHEN LOWER(TRIM(s.status)) IN ('rejeitado', 'rejeitada', 'reprovado', 'reprovada', 'recusado', 'recusada', 'rejected') THEN 'recusados'
                   ELSE 'disponivel'
                 END
          FROM ${DatabaseSchema.submissoesTable} s
-         WHERE s.id_utilizador = ? AND s.id_badge = ? AND (s.deleted_submissao IS NOT 1)
+         WHERE s.id_utilizador = ? AND s.id_badge = ? 
+           AND (s.deleted_submissao = 0 OR s.deleted_submissao IS NULL OR s.deleted_submissao = '0' OR s.deleted_submissao = 'false')
          ORDER BY s.id_submissao_local DESC
+         LIMIT 1),
+        (SELECT 'expirados' 
+         FROM ${DatabaseSchema.registoBadgesTable} rb 
+         INNER JOIN ${DatabaseSchema.badgesTable} b ON b.id_badge = rb.id_badge
+         WHERE rb.id_utilizador = ? AND rb.id_badge = ? AND (rb.deleted_registo IS NOT 1)
+           AND (rb.expirado = 1 OR (b.validade IS NOT NULL AND datetime(rb.data_obtencao, '+' || b.validade || ' day') < datetime('now')))
+         ORDER BY rb.data_obtencao DESC, rb.id_registo DESC
          LIMIT 1),
         'disponivel'
       ) as estado
-    ''', [userId, badgeId, userId, badgeId]);
+    ''', [userId, badgeId, userId, badgeId, userId, badgeId]);
     
     if (rows.isNotEmpty) {
       return rows.first['estado']?.toString() ?? 'disponivel';

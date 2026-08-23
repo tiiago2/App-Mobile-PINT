@@ -3,6 +3,7 @@ import 'package:uicons/uicons.dart';
 import '../../variaveis/variaveis.dart';
 import 'galeria_badges_modular.dart';
 import '../../pages/badge_detalhe.dart';
+import '../../controllers/galeria_controller.dart';
 
 class BadgeItemComEstadoWrapper extends StatelessWidget {
   final Map<String, dynamic> badge;
@@ -95,13 +96,14 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => BadgeDetalheScreen(badge: badge),
           ),
         );
+        GaleriaController.instance.carregarDados();
       },
       child: SizedBox(
         width: 76.0,

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:open_filex/open_filex.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
+import '../database/daos/badges_dao.dart';
 import '../database/daos/requisitos_dao.dart';
 import '../database/daos/submissao_dao.dart';
 import '../database/sync_manager.dart';
@@ -38,6 +39,7 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
   String? _dataExpiracao;
   int? _submissaoLocalId;
   Map<int, Map<String, dynamic>> _requisitoDocumentos = {};
+  String? _estadoAtual;
 
   @override
   void initState() {
@@ -68,6 +70,13 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
 
       if (badgeId != null) {
         final db = await DatabaseHelper.instance.database;
+
+        // Obter estado atualizado diretamente da base de dados local
+        final estadoDb = await BadgesDao.instance.obterEstadoDeUmBadge(userId, badgeId);
+        _estadoAtual = estadoDb;
+        widget.badge['estado'] = estadoDb;
+        widget.badge['status'] = estadoDb;
+
         final estado = _estadoNormalizado;
 
         // ── Feedback de rejeição ────────────────────────────────────────────
@@ -243,7 +252,7 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
         final subRows = await db.query(
           DatabaseSchema.submissoesTable,
           columns: ['id_submissao_local', 'status'],
-          where: 'id_utilizador = ? AND id_badge = ? AND deleted_submissao IS NULL',
+          where: 'id_utilizador = ? AND id_badge = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "0" OR deleted_submissao = "false")',
           whereArgs: [userId, badgeId],
           orderBy: 'id_submissao_local DESC',
           limit: 1,
@@ -341,7 +350,8 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
         idBadge: badgeId,
       );
 
-      // Atualizar status local no widget.badge
+      // Atualizar status local no widget.badge e no estado interno
+      _estadoAtual = 'em_progresso';
       widget.badge['status'] = 'em_progresso';
       widget.badge['estado'] = 'em_progresso';
 
@@ -629,7 +639,7 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
         final subRows = await db.query(
           DatabaseSchema.submissoesTable,
           columns: ['id_submissao_local', 'status'],
-          where: 'id_utilizador = ? AND id_badge = ? AND deleted_submissao IS NULL',
+          where: 'id_utilizador = ? AND id_badge = ? AND (deleted_submissao = 0 OR deleted_submissao IS NULL OR deleted_submissao = "0" OR deleted_submissao = "false")',
           whereArgs: [userId, badgeId],
           orderBy: 'id_submissao_local DESC',
           limit: 1,
@@ -657,6 +667,7 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
       );
       debugPrint('✅ [Submeter] Candidatura marcada como pendente no SQLite.');
 
+      _estadoAtual = 'pendente';
       widget.badge['status'] = 'pendente';
       widget.badge['estado'] = 'pendente';
 
@@ -1114,6 +1125,9 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
   }
 
   String get _estadoNormalizado {
+    if (_estadoAtual != null && _estadoAtual!.trim().isNotEmpty) {
+      return _estadoAtual!.trim().toLowerCase();
+    }
     for (final k in ['estado', 'status']) {
       final v = widget.badge[k];
       if (v is String && v.trim().isNotEmpty) return v.trim().toLowerCase();
