@@ -137,29 +137,34 @@ class _ObjetivosScreenState extends State<ObjetivosScreen> {
           children: [
             Row(
               children: [
-                // Avatar Circular com Imagem ou Iniciais do Badge
+                // Avatar Circular com Imagem ou Ícone do Badge
                 Container(
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
                     color: avatarColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
-                    image: imagem != null && imagem.isNotEmpty
-                        ? DecorationImage(
-                            image: NetworkImage(imagem),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
                   ),
-                  alignment: Alignment.center,
-                  child: imagem != null && imagem.isNotEmpty
-                      ? null
-                      : Text(
-                          titulo.isNotEmpty ? titulo.substring(0, 1).toUpperCase() : 'B',
-                          style: TextStyle(
+                  clipBehavior: Clip.antiAlias,
+                  child: (imagem != null && imagem.isNotEmpty)
+                      ? Image.network(
+                          imagem,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Icon(
+                                Icons.bolt_rounded,
+                                color: avatarColor,
+                                size: 22.0,
+                              ),
+                            );
+                          },
+                        )
+                      : Center(
+                          child: Icon(
+                            Icons.bolt_rounded,
                             color: avatarColor,
-                            fontSize: 14.0,
-                            fontWeight: FontWeight.bold,
+                            size: 22.0,
                           ),
                         ),
                 ),

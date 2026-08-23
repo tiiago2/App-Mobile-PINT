@@ -909,10 +909,9 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
                     img,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        UIcons.boldRounded.user,
-                        color: AppCores.fontes,
-                        size: compact ? 14 : 18,
+                      return Image.asset(
+                        'assets/images/default_pint.jpg',
+                        fit: BoxFit.cover,
                       );
                     },
                     loadingBuilder: (context, child, loadingProgress) {
@@ -929,10 +928,9 @@ class _EstatisticasScreenState extends State<EstatisticasScreen> {
                       );
                     },
                   )
-                : Icon(
-                    UIcons.boldRounded.user,
-                    color: AppCores.fontes,
-                    size: compact ? 14 : 18,
+                : Image.asset(
+                    'assets/images/default_pint.jpg',
+                    fit: BoxFit.cover,
                   ),
           ),
         ),
@@ -2080,10 +2078,9 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
                           img,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              UIcons.boldRounded.user,
-                              color: AppCores.fontes,
-                              size: destacado ? 18 : 14,
+                            return Image.asset(
+                              'assets/images/default_pint.jpg',
+                              fit: BoxFit.cover,
                             );
                           },
                           loadingBuilder: (context, child, loadingProgress) {
@@ -2100,10 +2097,9 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
                             );
                           },
                         )
-                      : Icon(
-                          UIcons.boldRounded.user,
-                          color: AppCores.fontes,
-                          size: destacado ? 18 : 14,
+                      : Image.asset(
+                          'assets/images/default_pint.jpg',
+                          fit: BoxFit.cover,
                         ),
                 ),
               ),
@@ -2190,10 +2186,9 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
                       img,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          UIcons.boldRounded.user,
-                          color: AppCores.fontes,
-                          size: 16,
+                        return Image.asset(
+                          'assets/images/default_pint.jpg',
+                          fit: BoxFit.cover,
                         );
                       },
                       loadingBuilder: (context, child, loadingProgress) {
@@ -2210,10 +2205,9 @@ class _ClassificacaoModalState extends State<ClassificacaoModal> {
                         );
                       },
                     )
-                  : Icon(
-                      UIcons.boldRounded.user,
-                      color: AppCores.fontes,
-                      size: 16,
+                  : Image.asset(
+                      'assets/images/default_pint.jpg',
+                      fit: BoxFit.cover,
                     ),
             ),
           ),

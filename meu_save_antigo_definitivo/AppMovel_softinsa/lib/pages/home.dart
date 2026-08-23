@@ -586,7 +586,7 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(color: borderColor, width: 2.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -599,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: avatarSize,
             height: avatarSize,
             decoration: BoxDecoration(
-              color: AppCores.outline.withOpacity(0.3),
+              color: AppCores.outline.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: ClipOval(
@@ -608,10 +608,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       user['img'] as String,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          UIcons.boldRounded.portrait,
-                          color: AppCores.fontes,
-                          size: avatarSize * 0.5,
+                        return Image.asset(
+                          'assets/images/default_pint.jpg',
+                          fit: BoxFit.cover,
                         );
                       },
                       loadingBuilder: (context, child, loadingProgress) {
@@ -628,10 +627,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       },
                     )
-                  : Icon(
-                      UIcons.boldRounded.portrait,
-                      color: AppCores.fontes,
-                      size: avatarSize * 0.5,
+                  : Image.asset(
+                      'assets/images/default_pint.jpg',
+                      fit: BoxFit.cover,
                     ),
             ),
           ),
@@ -651,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Text(
             user['area'] as String,
             style: TextStyle(
-              color: AppCores.fontes.withOpacity(0.5),
+              color: AppCores.fontes.withValues(alpha: 0.5),
               fontSize: 10.0,
             ),
             textAlign: TextAlign.center,
@@ -700,7 +698,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppCores.outline.withOpacity(0.3),
+              color: AppCores.outline.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: ClipOval(
@@ -709,10 +707,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       user['img'] as String,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          UIcons.boldRounded.portrait,
-                          color: AppCores.fontes,
-                          size: 18,
+                        return Image.asset(
+                          'assets/images/default_pint.jpg',
+                          fit: BoxFit.cover,
                         );
                       },
                       loadingBuilder: (context, child, loadingProgress) {
@@ -729,10 +726,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       },
                     )
-                  : Icon(
-                      UIcons.boldRounded.portrait,
-                      color: AppCores.fontes,
-                      size: 18,
+                  : Image.asset(
+                      'assets/images/default_pint.jpg',
+                      fit: BoxFit.cover,
                     ),
             ),
           ),
@@ -752,7 +748,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   user['area'] as String,
                   style: TextStyle(
-                    color: AppCores.fontes.withOpacity(0.5),
+                    color: AppCores.fontes.withValues(alpha: 0.5),
                     fontSize: 11.0,
                   ),
                 ),

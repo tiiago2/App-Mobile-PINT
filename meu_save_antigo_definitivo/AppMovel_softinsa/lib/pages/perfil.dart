@@ -12,14 +12,6 @@ import '../idiomas/app_localizations.dart';
 import 'badge_detalhe.dart';
 import 'historico_badges.dart';
 
-ImageProvider? _obterImageProvider(String? pathOrUrl) {
-  if (pathOrUrl == null || pathOrUrl.isEmpty) return null;
-  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-    return NetworkImage(pathOrUrl);
-  } else {
-    return FileImage(File(pathOrUrl));
-  }
-}
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -473,18 +465,41 @@ class CartaoPerfil extends StatelessWidget {
           width: 120,
           height: 120,
           decoration: BoxDecoration(
-            color: AppCores.outline.withOpacity(0.3),
+            color: AppCores.outline.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(35.0),
-            image: fotoUrl != null
-                ? DecorationImage(
-                    image: _obterImageProvider(fotoUrl)!,
-                    fit: BoxFit.cover,
-                  )
-                : null,
           ),
-          child: fotoUrl == null
-              ? const Icon(Icons.person, size: 40, color: AppCores.fontes)
-              : null,
+          clipBehavior: Clip.antiAlias,
+          child: (fotoUrl != null && fotoUrl!.isNotEmpty)
+              ? (fotoUrl!.startsWith('http://') || fotoUrl!.startsWith('https://'))
+                  ? Image.network(
+                      fotoUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.asset(
+                          'assets/images/default_pint.jpg',
+                          fit: BoxFit.cover,
+                        );
+                      },
+                    )
+                  : File(fotoUrl!).existsSync()
+                      ? Image.file(
+                          File(fotoUrl!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.asset(
+                              'assets/images/default_pint.jpg',
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        )
+                      : Image.asset(
+                          'assets/images/default_pint.jpg',
+                          fit: BoxFit.cover,
+                        )
+              : Image.asset(
+                  'assets/images/default_pint.jpg',
+                  fit: BoxFit.cover,
+                ),
         ),
         const SizedBox(width: 24.0),
         // Detalhes
@@ -628,26 +643,40 @@ class CartaoAssinatura extends StatelessWidget {
         ? badgeInfo['imagem']
         : null;
 
+    final Color avatarColor = badgeInfo['avatarColor'] is Color
+        ? badgeInfo['avatarColor'] as Color
+        : const Color(0xFF39639C);
+
     return Container(
       width: 50,
       height: 50,
       margin: const EdgeInsets.symmetric(horizontal: 6.0),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: AppCores.outline.withOpacity(0.3),
-        image: imageUrl != null
-            ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
-            : null,
+        color: avatarColor.withValues(alpha: 0.15),
       ),
-      child: imageUrl == null
-          ? const Center(
-              child: Icon(
-                Icons.image_not_supported,
-                color: AppCores.fontes,
-                size: 24.0,
-              ),
+      clipBehavior: Clip.antiAlias,
+      child: (imageUrl != null && imageUrl.isNotEmpty)
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Icon(
+                    Icons.bolt_rounded,
+                    color: avatarColor,
+                    size: 26.0,
+                  ),
+                );
+              },
             )
-          : null,
+          : Center(
+              child: Icon(
+                Icons.bolt_rounded,
+                color: avatarColor,
+                size: 26.0,
+              ),
+            ),
     );
   }
 
@@ -722,6 +751,9 @@ class CartaoGaleriaBadges extends StatelessWidget {
   Widget _buildBadgeItem(BuildContext context, Map<String, dynamic> badgeInfo) {
     final String? imageUrl = badgeInfo['imagem'];
     final String titulo = badgeInfo['titulo'] ?? '';
+    final Color avatarColor = badgeInfo['avatarColor'] is Color
+        ? badgeInfo['avatarColor'] as Color
+        : const Color(0xFF39639C);
 
     return GestureDetector(
       onTap: () {
@@ -737,7 +769,7 @@ class CartaoGaleriaBadges extends StatelessWidget {
           ),
         );
       },
-      child: Container(
+      child: SizedBox(
         width: 90,
         child: Column(
           children: [
@@ -746,14 +778,30 @@ class CartaoGaleriaBadges extends StatelessWidget {
               height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppCores.outline.withOpacity(0.3),
-                image: imageUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(imageUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+                color: avatarColor.withValues(alpha: 0.15),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: (imageUrl != null && imageUrl.isNotEmpty)
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Icon(
+                            Icons.bolt_rounded,
+                            color: avatarColor,
+                            size: 40.0,
+                          ),
+                        );
+                      },
+                    )
+                  : Center(
+                      child: Icon(
+                        Icons.bolt_rounded,
+                        color: avatarColor,
+                        size: 40.0,
+                      ),
+                    ),
             ),
             const SizedBox(height: 12.0),
             Text(
@@ -843,6 +891,9 @@ class CartaoHistoricoBadges extends StatelessWidget {
     final int pontos = badgeInfo['pontos'] ?? 0;
     final String textoData = badgeInfo['textoData'] ?? '';
     final Color corData = badgeInfo['corData'] ?? AppCores.fontes;
+    final Color avatarColor = badgeInfo['avatarColor'] is Color
+        ? badgeInfo['avatarColor'] as Color
+        : const Color(0xFF39639C);
 
     final estado = textoData.contains('Expirado') ? 'expirado' : 'conquistado';
     final badgeMap = {
@@ -868,23 +919,30 @@ class CartaoHistoricoBadges extends StatelessWidget {
               height: 48,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppCores.outline.withValues(alpha: 0.3),
-                image: imageUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(imageUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+                color: avatarColor.withValues(alpha: 0.15),
               ),
-              child: imageUrl == null
-                  ? const Center(
+              clipBehavior: Clip.antiAlias,
+              child: (imageUrl != null && imageUrl.isNotEmpty)
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Icon(
+                            Icons.bolt_rounded,
+                            color: avatarColor,
+                            size: 24.0,
+                          ),
+                        );
+                      },
+                    )
+                  : Center(
                       child: Icon(
-                        Icons.image_not_supported,
-                        color: AppCores.fontes,
+                        Icons.bolt_rounded,
+                        color: avatarColor,
                         size: 24.0,
                       ),
-                    )
-                  : null,
+                    ),
             ),
             const SizedBox(width: 16.0),
             Expanded(

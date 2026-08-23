@@ -46,25 +46,14 @@ class BadgeProgressCard extends StatelessWidget {
   });
 
   // ---------------------------------------------------------------------------
-  // Avatar: rede → ícone → placeholder colorido com inicial
+  // Avatar: rede → ícone → placeholder colorido
   // ---------------------------------------------------------------------------
   Widget _buildAvatar() {
     final hasNetworkImage = imagem != null &&
         (imagem!.startsWith('http://') || imagem!.startsWith('https://'));
 
-    Widget innerContent;
-
-    if (hasNetworkImage) {
-      innerContent = ClipOval(
-        child: Image.network(
-          imagem!,
-          width: 82,
-          height: 82,
-          fit: BoxFit.cover,
-        ),
-      );
-    } else if (icon != null) {
-      innerContent = Container(
+    Widget buildFallback() {
+      return Container(
         width: 82,
         height: 82,
         decoration: BoxDecoration(
@@ -75,43 +64,25 @@ class BadgeProgressCard extends StatelessWidget {
               : null,
         ),
         child: Center(
-          child: Icon(icon, color: avatarColor, size: 36.0),
+          child: Icon(icon ?? Icons.bolt_rounded, color: avatarColor, size: 36.0),
+        ),
+      );
+    }
+
+    Widget innerContent;
+
+    if (hasNetworkImage) {
+      innerContent = ClipOval(
+        child: Image.network(
+          imagem!,
+          width: 82,
+          height: 82,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => buildFallback(),
         ),
       );
     } else {
-      // Placeholder colorido com inicial – mesma lógica de galeria_badges_modular.dart
-      const List<Color> paleta = [
-        Color(0xFF4F8EF7),
-        Color(0xFF62C884),
-        Color(0xFFF8AA0B),
-        Color(0xFFE96A6A),
-        Color(0xFF9B6AF7),
-        Color(0xFF00BFAE),
-        Color(0xFFFF7043),
-        Color(0xFF26A69A),
-      ];
-      final cor = paleta[
-        titulo.isEmpty
-            ? 0
-            : titulo.codeUnits.fold(0, (a, b) => a + b) % paleta.length
-      ];
-      innerContent = ClipOval(
-        child: Container(
-          width: 82,
-          height: 82,
-          color: cor,
-          child: Center(
-            child: Text(
-              titulo.isNotEmpty ? titulo[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      );
+      innerContent = buildFallback();
     }
 
     // Estrela dourada no canto – mesma lógica de galeria_badges_modular.dart

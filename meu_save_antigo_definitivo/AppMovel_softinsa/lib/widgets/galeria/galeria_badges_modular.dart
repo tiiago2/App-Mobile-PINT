@@ -44,37 +44,23 @@ class BadgeItemModular extends StatelessWidget {
     this.onTap,
   });
 
-  // Placeholder colorido com a inicial do badge
+  // Placeholder padrão para avatar do badge quando offline ou sem imagem
   Widget _buildPlaceholder() {
-    final titulo = (badge['titulo'] as String?) ?? '';
-    const List<Color> paleta = [
-      Color(0xFF4F8EF7),
-      Color(0xFF62C884),
-      Color(0xFFF8AA0B),
-      Color(0xFFE96A6A),
-      Color(0xFF9B6AF7),
-      Color(0xFF00BFAE),
-      Color(0xFFFF7043),
-      Color(0xFF26A69A),
-    ];
-    final cor = paleta[
-      titulo.isEmpty ? 0 : titulo.codeUnits.fold(0, (a, b) => a + b) % paleta.length
-    ];
-    final letra = titulo.isNotEmpty ? titulo[0].toUpperCase() : '?';
+    final avatarColor = badge['avatarColor'] is Color
+        ? badge['avatarColor'] as Color
+        : const Color(0xFF39639C);
+    final icon = badge['icon'] as IconData? ?? Icons.bolt_rounded;
 
     return ClipOval(
       child: Container(
         width: 76,
         height: 76,
-        color: cor,
+        color: avatarColor.withValues(alpha: 0.15),
         child: Center(
-          child: Text(
-            letra,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
+          child: Icon(
+            icon,
+            color: avatarColor,
+            size: 34,
           ),
         ),
       ),
@@ -114,6 +100,7 @@ class BadgeItemModular extends StatelessWidget {
                           fit: BoxFit.cover,
                           color: imageColor,
                           colorBlendMode: imageBlendMode,
+                          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
                         ),
                       )
                     : _buildPlaceholder(),

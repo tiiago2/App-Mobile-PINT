@@ -282,25 +282,45 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                           decoration: BoxDecoration(
                             color: AppCores.outline.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(35.0),
-                            image: _fotoUrl != null && !_isLoadingImage
-                                ? DecorationImage(
-                                    image: _obterImageProvider(_fotoUrl)!,
-                                    fit: BoxFit.cover,
-                                    onError: (exception, stackTrace) {
-                                      debugPrint('⚠️ Erro ao carregar imagem de perfil: $exception');
-                                    },
-                                  )
-                                : null,
                           ),
+                          clipBehavior: Clip.antiAlias,
                           child: _isLoadingImage
                               ? const Center(
                                   child: CircularProgressIndicator(
                                     color: AppCores.azulFundo,
                                   ),
                                 )
-                              : (_fotoUrl == null
-                                  ? const Icon(Icons.person, size: 40, color: AppCores.fontes)
-                                  : null),
+                              : (_fotoUrl != null && _fotoUrl!.isNotEmpty)
+                                  ? (_fotoUrl!.startsWith('http://') || _fotoUrl!.startsWith('https://'))
+                                      ? Image.network(
+                                          _fotoUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Image.asset(
+                                              'assets/images/default_pint.jpg',
+                                              fit: BoxFit.cover,
+                                            );
+                                          },
+                                        )
+                                      : File(_fotoUrl!).existsSync()
+                                          ? Image.file(
+                                              File(_fotoUrl!),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Image.asset(
+                                                  'assets/images/default_pint.jpg',
+                                                  fit: BoxFit.cover,
+                                                );
+                                              },
+                                            )
+                                          : Image.asset(
+                                              'assets/images/default_pint.jpg',
+                                              fit: BoxFit.cover,
+                                            )
+                                  : Image.asset(
+                                      'assets/images/default_pint.jpg',
+                                      fit: BoxFit.cover,
+                                    ),
                         ),
                         if (!_isLoadingImage)
                           Positioned(

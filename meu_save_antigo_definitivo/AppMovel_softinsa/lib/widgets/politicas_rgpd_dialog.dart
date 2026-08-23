@@ -1,18 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../variaveis/variaveis.dart';
 import '../idiomas/app_localizations.dart';
 
-/// Modal bottom sheet reutilizável que apresenta as Políticas de Privacidade e RGPD.
+/// Utilitário e modal que redireciona para as Políticas de Privacidade e RGPD no browser.
 class PoliticasRgpdDialog extends StatelessWidget {
+  static const String urlPoliticas = 'https://pint-frontend-un33.onrender.com/politicas-rgpd';
+
   const PoliticasRgpdDialog({super.key});
 
+  /// Redireciona diretamente para a página web das políticas no browser externo.
+  static Future<void> abrirWeb() async {
+    final Uri uri = Uri.parse(urlPoliticas);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      debugPrint('⚠️ [RGPD] Erro ao abrir URL no browser: $e');
+      try {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (e2) {
+        debugPrint('⚠️ [RGPD] Erro no fallback: $e2');
+      }
+    }
+  }
+
+  /// Ponto de entrada principal: abre a página web das políticas no browser
   static void mostrar(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const PoliticasRgpdDialog(),
-    );
+    abrirWeb();
   }
 
   @override

@@ -186,22 +186,18 @@ class _HistoricoBadgesScreenState extends State<HistoricoBadgesScreen> {
     );
   }
 
-  // ── Placeholder para Avatar com Inicial ───────────────────────────────────
+  // ── Placeholder para Avatar do Badge ─────────────────────────────────────
   Widget _buildPlaceholder(String titulo, Color avatarColor, bool especial) {
-    final letra = titulo.isNotEmpty ? titulo[0].toUpperCase() : '?';
     return ClipOval(
       child: Container(
         width: 50,
         height: 50,
-        color: avatarColor,
+        color: avatarColor.withValues(alpha: 0.15),
         child: Center(
-          child: Text(
-            letra,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          child: Icon(
+            Icons.bolt_rounded,
+            color: avatarColor,
+            size: 24,
           ),
         ),
       ),

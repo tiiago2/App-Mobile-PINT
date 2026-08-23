@@ -1214,26 +1214,15 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
   }
 
   Widget _placeholderAvatar(double size) {
-    const List<Color> paleta = [
-      Color(0xFF4F8EF7), Color(0xFF62C884), Color(0xFFF8AA0B),
-      Color(0xFFE96A6A), Color(0xFF9B6AF7), Color(0xFF00BFAE),
-      Color(0xFFFF7043), Color(0xFF26A69A),
-    ];
-    final cor = paleta[
-      _titulo.isEmpty ? 0 : _titulo.codeUnits.fold(0, (a, b) => a + b) % paleta.length
-    ];
     return Container(
       width: size,
       height: size,
-      color: cor,
+      color: _avatarColor.withValues(alpha: 0.15),
       alignment: Alignment.center,
-      child: Text(
-        _titulo.isNotEmpty ? _titulo[0].toUpperCase() : '?',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: size * 0.37,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Icon(
+        _icon ?? Icons.bolt_rounded,
+        color: _avatarColor,
+        size: size * 0.45,
       ),
     );
   }
