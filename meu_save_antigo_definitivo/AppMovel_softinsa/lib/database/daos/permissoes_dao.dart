@@ -91,6 +91,26 @@ class PermissoesDao {
     return rows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
   }
 
+  /// Verifica se o utilizador tem permissão para partilhar externamente / LinkedIn (toggle == 1).
+  Future<bool> podePartilhar() async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      DatabaseSchema.permissoesTable,
+      where: "(LOWER(descricao_permissao) LIKE '%partilha%' OR LOWER(descricao_permissao) LIKE '%linkedin%' OR LOWER(scope_json) LIKE '%share%') AND deleted_permissao IS NOT 1",
+    );
+
+    if (rows.isEmpty) {
+      final allRows = await db.query(
+        DatabaseSchema.permissoesTable,
+        where: 'deleted_permissao IS NOT 1',
+      );
+      if (allRows.isEmpty) return true;
+      return allRows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
+    }
+
+    return rows.any((r) => r['toggle'] == 1 || r['toggle'] == true);
+  }
+
   /// Batch upserts permissions from sync.
   Future<void> upsertFromSync(List<Map<String, dynamic>> dados) async {
     final db = await DatabaseHelper.instance.database;

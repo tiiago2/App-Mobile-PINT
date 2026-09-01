@@ -11,31 +11,40 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
   const BadgeItemComEstadoWrapper({super.key, required this.badge});
 
   Widget _buildEstadoOverlay(String estado) {
-    if (estado == 'emProgresso' || estado == 'disponivel') {
+    final est = estado.toLowerCase();
+    if (est == 'emprogresso') {
       return const SizedBox();
     }
 
     Color corFundo;
     IconData icone;
     
-    switch (estado) {
+    switch (est) {
       case 'conquistados':
+      case 'conquistado':
+      case 'concluidos':
+      case 'concluido':
         corFundo = const Color(0xFF009966);
         icone = UIcons.boldRounded.check;
         break;
       case 'recusados':
+      case 'recusado':
         corFundo = const Color(0xFFC41230);
         icone = UIcons.boldRounded.cross_small;
         break;
       case 'pendentes':
+      case 'pendente':
         corFundo = const Color(0xFFF8AA0B);
         icone = UIcons.boldRounded.clock;
         break;
       case 'expirados':
+      case 'expirado':
         corFundo = AppCores.erroLogin;
         icone = UIcons.boldRounded.time_past;
         break;
       case 'bloqueados':
+      case 'bloqueado':
+      case 'disponivel':
         corFundo = const Color(0xFFADADAD);
         icone = UIcons.boldRounded.lock;
         break;
@@ -78,10 +87,11 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
     BlendMode? imageBlendMode;
 
     if (estado != null) {
-      if (estado == 'bloqueados') {
+      final est = estado.toLowerCase();
+      if (est == 'bloqueados' || est == 'bloqueado' || est == 'disponivel') {
         imageColor = Colors.grey;
         imageBlendMode = BlendMode.saturation;
-      } else if (estado == 'pendentes' || estado == 'recusados' || estado == 'expirados' || estado == 'emProgresso') {
+      } else if (est == 'pendentes' || est == 'pendente' || est == 'recusados' || est == 'recusado' || est == 'expirados' || est == 'expirado' || est == 'emprogresso') {
         imageColor = Colors.white.withValues(alpha: 0.5);
         imageBlendMode = BlendMode.lighten;
       }
@@ -113,9 +123,7 @@ class BadgeItemComEstadoWrapper extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 content,
-                if (estado != null &&
-                    estado != 'emProgresso' &&
-                    estado != 'disponivel')
+                if (estado != null && estado.toLowerCase() != 'emprogresso')
                   Positioned(
                     top: 54.0, // 76 (imagem) - 22 (icone)
                     left: 56.0, // puxar ligeiramente para a direita

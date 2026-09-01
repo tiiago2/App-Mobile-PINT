@@ -75,6 +75,43 @@ class BadgeItemModular extends StatelessWidget {
     final hasNetworkImage = imagem is String &&
         (imagem.startsWith('http://') || imagem.startsWith('https://'));
 
+    Widget avatarWidget = Container(
+      width: 76.0,
+      height: 76.0,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: isEspecial
+            ? Border.all(
+                color: const Color(0xFFF8AA0B), // Cor de ouro do design
+                width: 2.0,
+              )
+            : null,
+      ),
+      child: hasNetworkImage 
+          ? ClipOval( 
+              child: Image.network(
+                imagem,
+                fit: BoxFit.cover,
+                color: imageColor,
+                colorBlendMode: imageBlendMode,
+                errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+              ),
+            )
+          : _buildPlaceholder(),
+    );
+
+    if (imageBlendMode == BlendMode.saturation) {
+      avatarWidget = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0,      0,      0,      1, 0,
+        ]),
+        child: avatarWidget,
+      );
+    }
+
     final itemContent = SizedBox(
       width: 76.0,
       child: Column(
@@ -82,30 +119,7 @@ class BadgeItemModular extends StatelessWidget {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
-                width: 76.0,
-                height: 76.0,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: isEspecial
-                      ? Border.all(
-                          color: const Color(0xFFF8AA0B), // Cor de ouro do design
-                          width: 2.0,
-                        )
-                      : null,
-                ),
-                child: hasNetworkImage 
-                    ? ClipOval( 
-                        child: Image.network(
-                          imagem,
-                          fit: BoxFit.cover,
-                          color: imageColor,
-                          colorBlendMode: imageBlendMode,
-                          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-                        ),
-                      )
-                    : _buildPlaceholder(),
-              ),
+              avatarWidget,
               if (isEspecial)
                 Positioned(
                   top: 0.0,

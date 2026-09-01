@@ -708,6 +708,20 @@ class _BadgeDetalheScreenState extends State<BadgeDetalheScreen> {
   }
 
   Future<void> _partilharLinkedin() async {
+    // 1. Validação na tabela local de permissões (toggle == 1)
+    final podePartilhar = await PermissoesDao.instance.podePartilhar();
+    if (!podePartilhar) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Não tem permissão para partilhar nas redes sociais.'),
+          ),
+        );
+      }
+      return;
+    }
+
     final String text = 'Conquistei o Badge "$_titulo" na Softinsa!';
     final String url = 'https://softinsa.pt'; // Softinsa portal link
     final Uri linkedinUri = Uri.parse(
