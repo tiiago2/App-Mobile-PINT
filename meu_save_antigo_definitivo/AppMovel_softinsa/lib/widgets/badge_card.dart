@@ -116,7 +116,7 @@ class BadgeCard extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => BadgeDetalheScreen(badge: badgeMap),
+            builder: (context) => BadgeDetalheScreen(badge: Map<String, dynamic>.from(badgeMap)),
           ),
         );
       },
